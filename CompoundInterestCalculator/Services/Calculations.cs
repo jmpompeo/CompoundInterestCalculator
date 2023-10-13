@@ -2,25 +2,17 @@
 {
     public class Calculations
     {
-        public string GetYearlyAmountWithInterest(double startingBalance, double interestPercentage)
+        public string GetYearlyAmountWithInterest(double startingBalance, double interestPercentage, int years)
         {
-            double newBalance = 0;
-            double endingBalance = 0;
-
             var percentConversion = Helpers.Conversions.ConvertPercentageToDecimal(interestPercentage);
-
-            var interest = startingBalance * percentConversion;
-            for (int i = 0; i < 5; i++)
+            
+            for (int i = 0; i < years; i++)
             {
-                newBalance = interest + startingBalance;
-                endingBalance += newBalance + interest;
+                var interest = startingBalance * percentConversion;
+                startingBalance += interest;                
             }
 
-            return Helpers.Conversions.ConvertDoubleToCurrency(newBalance);
-
-        }
-        
-        // TODO: Need to find a way to do it with adding years as well
-        
+            return Helpers.Conversions.ConvertDoubleToCurrency(startingBalance);
+        }        
     }
 }
