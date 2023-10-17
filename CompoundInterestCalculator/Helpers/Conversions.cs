@@ -10,7 +10,7 @@ namespace CompoundInterestCalculator.Helpers
         {
             var cultureInfo = new CultureInfo("en-US");
 
-            var stringAmount = money.ToString("C", cultureInfo);            
+            var stringAmount = money.ToString("C", cultureInfo);
 
             return stringAmount;
         }
