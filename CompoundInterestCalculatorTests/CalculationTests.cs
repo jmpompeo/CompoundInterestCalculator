@@ -1,6 +1,4 @@
 using CompoundInterestCalculator.Services;
-using System;
-using Xunit;
 
 public class CalculationTests
 {
@@ -13,6 +11,7 @@ public class CalculationTests
     [InlineData(2500.0, 2, 10, "$3,047.49")]
     public void GetYearlyAmountWithInterest_CalculatesCorrectly(double startingBalance, double interestPercentage, int years, string expected)
     {
+        // Arrange
         var calculations = new Calculations();
 
         // Act
@@ -31,6 +30,7 @@ public class CalculationTests
     [InlineData(2500.0, 0.02, "$2,500.00")]
     public void GetYearlyAmountWithInterest_ReturnsInputBalance_WhenYearsIsZero(double startingBalance, double interestPercentage, string expected)
     {
+        // Arrange
         var calculations = new Calculations();
 
         // Act
