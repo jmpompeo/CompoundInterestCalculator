@@ -27,6 +27,8 @@ jobs:
         dotnet test
 
     - name: dotnet-format
-      uses: xt0rted/dotnet-format@v1.2.0
+      run: |
+        dotnet tool install -g dotnet-format
+        dotnet format --folder C:\Users\joeyp\source\repos\PracticeVS\CompoundInterestCalculator 
   
 
