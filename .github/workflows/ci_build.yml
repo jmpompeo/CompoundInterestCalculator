@@ -29,7 +29,6 @@ jobs:
     - name: dotnet-format
       run: |
         dotnet tool install -g dotnet-format
-        dotnet format --folder ./CompoundInterestCalculator
-        dotnet format --folder ./CompoundInterestCalculatorTests
+        dotnet format '.\'
   
 
