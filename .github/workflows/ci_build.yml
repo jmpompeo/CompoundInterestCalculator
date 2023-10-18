@@ -30,7 +30,7 @@ jobs:
       run: dotnet tool install -g dotnet-format
 
     - name: Run dotnet format
-      run: dotnet format '.\' --folder --check --verbosity diagnostic
+      run: dotnet format '.\' --verbosity diagnostic
     
     # - name: Add Dotnet Format Problem Matcher
     #   uses: xt0rted/dotnet-format-problem-matcher@v1
