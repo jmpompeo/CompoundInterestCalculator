@@ -1,6 +1,6 @@
 name: Build
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
   build-and-test:
@@ -10,7 +10,7 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Setup .NET Core SDK
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v3
       with:
         dotnet-version: '6.0.x'
     
@@ -25,10 +25,15 @@ jobs:
     - name: Run Unit Tests
       run: |
         dotnet test
+    
+    - name: Add Dotnet Format Problem Matcher
+      uses: xt0rted/dotnet-format-problem-matcher@v1
 
-    - name: dotnet-format
-      run: |
-        dotnet tool install -g dotnet-format
-        dotnet format '.\'
+    - name: Restore dotnet tools
+      uses: xt0rted/dotnet-tool-restore@v1
+
+    - name: Run dotnet format
+      uses: xt0rted/dotnet-format@v1
+
   
 
