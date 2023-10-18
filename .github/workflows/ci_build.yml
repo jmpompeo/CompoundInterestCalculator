@@ -27,7 +27,7 @@ jobs:
         dotnet test
 
     - name: Install dotnet format
-      run: dotnet tool install -g dotnet-format
+      run: dotnet tool install -g dotnet-format --version 7.0.360101
 
     - name: Check dotnet format dotnet version
       run: dotnet tool list --global
