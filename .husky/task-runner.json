@@ -8,6 +8,13 @@
             "command": "cmd",
             "args": ["/c", "echo Husky.Net is awesome!" ]
          }
+      },
+      {
+         "name": "dotnet-format-staged-files",
+         "group": "pre-commit-operations",
+         "command": "dotnet",
+         "args": ["format", "--include", "${staged}"],
+         "include": ["**/*.cs"]
       }
    ]
 }
