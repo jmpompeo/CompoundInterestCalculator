@@ -28,14 +28,4 @@ jobs:
 
     - name: Run dotnet format
       run: dotnet format --verify-no-changes --verbosity diagnostic
-    
-    # - name: Add Dotnet Format Problem Matcher
-    #   uses: xt0rted/dotnet-format-problem-matcher@v1
-
-    # - name: Restore dotnet tools
-    #   uses: xt0rted/dotnet-tool-restore@v1
-    
-    # - name: Run dotnet format
-    #   uses: xt0rted/dotnet-format@v1.2.0
-  
 
