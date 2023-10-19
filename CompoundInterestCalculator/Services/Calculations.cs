@@ -4,8 +4,8 @@ namespace CompoundInterestCalculator.Services
 {
     public class Calculations
     {
-         public string GetYearlyAmountWithInterest(double startingBalance, double interestPercentage, int years)
-         {
+        public string GetYearlyAmountWithInterest(double startingBalance, double interestPercentage, int years)
+        {
             var percentConversion = Conversions.ConvertPercentageToDecimal(interestPercentage);
 
             for (int i = 0; i < years; i++)
@@ -15,7 +15,7 @@ namespace CompoundInterestCalculator.Services
             }
 
             return Conversions.ConvertDoubleToCurrency(startingBalance);
-         }
+        }
 
         public void Operations()
         {

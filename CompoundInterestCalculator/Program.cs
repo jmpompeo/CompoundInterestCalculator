@@ -4,8 +4,8 @@ internal class Program
 {
     private static void Main(string[] args)
     {
-       var calculations = new Calculations();
+        var calculations = new Calculations();
 
-       calculations.Operations();
+        calculations.Operations();
     }
 }
