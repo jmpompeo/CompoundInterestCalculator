@@ -21,7 +21,6 @@ namespace CompoundInterestCalculator.Services
         {
             Console.WriteLine("Insert a starting balance");
             var startingBalance = Console.ReadLine();
-
             InputCheck.CheckInput(startingBalance);
             double.TryParse(startingBalance, out double newBalance);
 
