@@ -20,15 +20,21 @@ namespace CompoundInterestCalculator.Services
         public void Operations()
         {
             Console.WriteLine("Insert a starting balance");
-            double.TryParse(Console.ReadLine(), out var startingBalance);
+            var startingBalance = Console.ReadLine();
+            InputCheck.CheckInput(startingBalance);
+            double.TryParse(startingBalance, out double newBalance);
 
             Console.WriteLine("Insert a interest rate");
-            double.TryParse(Console.ReadLine(), out var interestRate);
+            var interestRate = Console.ReadLine();
+            InputCheck.CheckInput(interestRate);
+            double.TryParse(Console.ReadLine(), out var interest);
 
             Console.WriteLine("Enter number of years");
-            int.TryParse(Console.ReadLine(), out var years);
+            var years = Console.ReadLine();
+            InputCheck.CheckInput(years);
+            int.TryParse(Console.ReadLine(), out var numOfYears);
 
-            GetYearlyAmountWithInterest(startingBalance, interestRate, years);
+            GetYearlyAmountWithInterest(newBalance, interest, numOfYears);
         }
     }
 }
