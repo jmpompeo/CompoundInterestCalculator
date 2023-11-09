@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using CompoundInterestCalculator.Exceptions;
+using System.Text.RegularExpressions;
 
 namespace CompoundInterestCalculator.Helpers
 {
