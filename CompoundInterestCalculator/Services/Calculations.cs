@@ -28,12 +28,12 @@ namespace CompoundInterestCalculator.Services
             Console.WriteLine("Insert a interest rate");
             var interestRate = Console.ReadLine();
             InputCheck.CheckInput(interestRate);
-            double.TryParse(Console.ReadLine(), out var interest);
+            double.TryParse(interestRate, out var interest);
 
             Console.WriteLine("Enter number of years");
             var years = Console.ReadLine();
             InputCheck.CheckInput(years);
-            int.TryParse(Console.ReadLine(), out var numOfYears);
+            int.TryParse(years, out var numOfYears);
 
             GetYearlyAmountWithInterest(newBalance, interest, numOfYears);
         }
