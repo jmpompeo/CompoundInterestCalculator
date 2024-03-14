@@ -1,0 +1,13 @@
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+WORKDIR /source
+
+COPY CompoundInterestCalculatorTests/*.csproj .
+RUN dotnet restore
+
+COPY CompoundInterestCalculatorTests/. .
+RUN dotnet publish -c release --no-restore -o /compoundint
+
+FROM mcr.microsoft.com/dotnet/aspnet:6.0
+WORKDIR /CompoundInterestCalculatorTests
+COPY --from=build /compoundint .
+ENTRYPOINT ["dotnet", "CompoundInterestCalculatorTests.dll"]
