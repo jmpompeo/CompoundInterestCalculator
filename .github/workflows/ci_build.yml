@@ -2,10 +2,10 @@ name: Build
 
 on:
   push:
-    branches: [master, release, req*, feature*]
+    branches: [master, 'release/**', 'req/**', 'feature/**']
   pull_request:
     types: [opened, edited, reopened, review_requested]
-    branches: [master, release, feature*]
+    branches: [master, 'release/**', 'feature/**']
 
 jobs:
   build-and-test:
