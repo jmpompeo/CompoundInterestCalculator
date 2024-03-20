@@ -3,9 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.6.33723.286
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CompoundInterestCalculator", "CompoundInterestCalculator\CompoundInterestCalculator.csproj", "{F09A281F-BFD3-45CE-B76A-7C9E5E068A98}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CompoundInterestCalculator", "CompoundInterestCalculator\CompoundInterestCalculator.csproj", "{F09A281F-BFD3-45CE-B76A-7C9E5E068A98}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CompoundInterestCalculatorTests", "CompoundInterestCalculatorTests\CompoundInterestCalculatorTests.csproj", "{E26BD599-4F10-44AF-9064-5B7933E7268A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CompoundInterestCalculatorTests", "CompoundInterestCalculatorTests\CompoundInterestCalculatorTests.csproj", "{E26BD599-4F10-44AF-9064-5B7933E7268A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CompoundCalc", "CompoundCalc\CompoundCalc.csproj", "{E19B765B-3804-48A0-9070-4D45F191676E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{E26BD599-4F10-44AF-9064-5B7933E7268A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E26BD599-4F10-44AF-9064-5B7933E7268A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E26BD599-4F10-44AF-9064-5B7933E7268A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E19B765B-3804-48A0-9070-4D45F191676E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E19B765B-3804-48A0-9070-4D45F191676E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E19B765B-3804-48A0-9070-4D45F191676E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E19B765B-3804-48A0-9070-4D45F191676E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
