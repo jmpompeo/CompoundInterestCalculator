@@ -8,7 +8,7 @@
       "enableLiveMetricsFilters": true
     },
     "logLevel": {
-      "CompoundCalc.CompoundCalculator" : "Information"
+      "CompoundCalc.CompoundCalculator" : "Debug"
     }
   },
   "version": "2.0"

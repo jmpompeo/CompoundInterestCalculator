@@ -2,11 +2,11 @@
 
 namespace CompoundInterestCalculator.Helpers
 {
-    public static class InputCheck
+    public static partial class InputCheck
     {
         public static string CheckInput(string input)
         {
-            if (!Regex.IsMatch(input, "^[0-9]*$"))
+            if (!MyRegex().IsMatch(input))
                 throw new NotSupportedException("Input must only contains numbers");
 
             if (string.IsNullOrEmpty(input))
@@ -14,5 +14,8 @@ namespace CompoundInterestCalculator.Helpers
 
             return input;
         }
+
+        [GeneratedRegex("^[0-9]*$")]
+        private static partial Regex MyRegex();
     }
 }

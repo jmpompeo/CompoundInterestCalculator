@@ -14,7 +14,7 @@ namespace CompoundInterestCalculatorTests
         public void GetYearlyAmountWithInterest_CalculatesCorrectly(double startingBalance, double interestPercentage, int years, string expected)
         {
             // Arrange
-            var calculations = new Calculations();
+            var calculations = new CalculationService();
 
             // Act
             string result = calculations.GetYearlyAmountWithInterest(startingBalance, interestPercentage, years);
@@ -33,7 +33,7 @@ namespace CompoundInterestCalculatorTests
         public void GetYearlyAmountWithInterest_ReturnsInputBalance_WhenYearsIsZero(double startingBalance, double interestPercentage, string expected)
         {
             // Arrange
-            var calculations = new Calculations();
+            var calculations = new CalculationService();
 
             // Act
             string result = calculations.GetYearlyAmountWithInterest(startingBalance, interestPercentage, 0);
