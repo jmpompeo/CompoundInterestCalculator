@@ -1,13 +1,13 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /source
 
-COPY CompoundInterestCalculator/*.csproj .
+COPY CompoundCalc/*.csproj .
 RUN dotnet restore
 
-COPY CompoundInterestCalculator/. .
+COPY CompoundCalc/. .
 RUN dotnet publish -c release --no-restore -o /compoundint
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
-WORKDIR /CompoundInterestCalculator
+WORKDIR /CompoundCalc
 COPY --from=build /compoundint .
-ENTRYPOINT ["dotnet", "CompoundInterestCalculator.dll"]
+ENTRYPOINT ["dotnet", "CompoundCalc.dll"]

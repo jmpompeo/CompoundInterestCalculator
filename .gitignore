@@ -99,8 +99,6 @@ StyleCopReport.xml
 *.scc
 *.vscode
 *.launchsettings.json
-*.serviceDependencies.json
-*.serviceDependencies.local.json
 
 # Chutzpah Test files
 _Chutzpah*
@@ -365,3 +363,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/CompoundCalc/Properties/serviceDependencies.json
+/CompoundCalc/Properties/serviceDependencies.local.json
