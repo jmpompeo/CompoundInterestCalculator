@@ -1,6 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 
-namespace CompoundInterestCalculator.Helpers
+namespace CompoundCalc.Helpers
 {
     public static class InputCheck
     {

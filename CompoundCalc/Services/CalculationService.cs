@@ -1,11 +1,11 @@
 ﻿using CompoundCalc.Models.Requests;
-using CompoundInterestCalculator.Helpers;
+using CompoundCalc.Helpers;
 
-namespace CompoundInterestCalculator.Services
+namespace CompoundCalc.Services
 {
     public class CalculationService
     {
-        public string GetYearlyAmountWithInterest(InterestCalcReq req)
+        public string? GetYearlyAmountWithInterest(InterestCalcReq req)
         {
             var percentConversion = Conversions.
                 ConvertPercentageToDecimal(req.InterestRate);

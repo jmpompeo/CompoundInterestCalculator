@@ -1,5 +1,5 @@
 using CompoundCalc.Models.Requests;
-using CompoundInterestCalculator.Services;
+using CompoundCalc.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -34,10 +34,11 @@ public class CompoundCalculator
 
         var intCalcReq = JsonConvert.DeserializeObject<InterestCalcReq>(reqBody);
 
-        string endingBalance;
+        string? endingBalance;
         try
         {
-            endingBalance = _calculationService.GetYearlyAmountWithInterest(intCalcReq);
+            endingBalance = _calculationService.
+                GetYearlyAmountWithInterest(intCalcReq);
         }
         catch (Exception ex)
         {
