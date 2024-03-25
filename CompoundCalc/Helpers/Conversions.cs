@@ -1,10 +1,11 @@
 ﻿using System.Globalization;
 
-namespace CompoundInterestCalculator.Helpers
+namespace CompoundCalc.Helpers
 {
     public static class Conversions
     {
-        public static double ConvertPercentageToDecimal(double interestPercentage) => interestPercentage / 100;
+        public static double ConvertPercentageToDecimal(double interestPercentage)
+            => interestPercentage / 100;
 
         public static string ConvertDoubleToCurrency(double money)
         {
