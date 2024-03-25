@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\CompoundInterestCalculator\CompoundInterestCalculator.csproj" />
+	  <ProjectReference Include="..\CompoundCalc\CompoundCalc.csproj" />
   </ItemGroup>
 
 </Project>

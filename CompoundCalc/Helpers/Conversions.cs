@@ -1,6 +1,6 @@
 ﻿using System.Globalization;
 
-namespace CompoundInterestCalculator.Helpers
+namespace CompoundCalc.Helpers
 {
     public static class Conversions
     {
