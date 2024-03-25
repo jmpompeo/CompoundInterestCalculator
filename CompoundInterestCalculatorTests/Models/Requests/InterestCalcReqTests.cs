@@ -1,9 +1,8 @@
 using CompoundCalc.Models.Requests;
-using Xunit;
 
 namespace CompoundInterestCalculatorTests.Models.Requests;
 
-public class IntereestCalcReqTests
+public class InterestCalcReqTests
 {
     [Fact]
     public void InterestCalcReq_Should_Throw_Out_Of_Range_When_Starting_Balance_Is_Negative()
