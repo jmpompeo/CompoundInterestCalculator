@@ -19,7 +19,7 @@ public class CompoundCalculator
         _calculationService = calculationService;
     }
 
-    [Function("InterestCalculation")]
+    [Function("CompoundCalculator")]
     public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous,
         "get")] HttpRequest req)
     {
