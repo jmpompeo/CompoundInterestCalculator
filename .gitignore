@@ -366,3 +366,4 @@ FodyWeavers.xsd
 /CompoundCalc/Properties/serviceDependencies.json
 /CompoundCalc/Properties/serviceDependencies.local.json
 Scripts/arm-templates/
+.infrastructure/templates
