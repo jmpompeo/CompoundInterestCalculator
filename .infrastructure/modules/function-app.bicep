@@ -95,3 +95,6 @@ resource asp 'Microsoft.Web/serverfarms@2023-01-01' = {
     zoneRedundant: false
   }
 }
+
+output func_app_id string = func_app.id
+output func_app_name string = func_app.name
