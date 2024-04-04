@@ -1,19 +1,3 @@
-// resource asp 'Microsoft.Web/serverfarms@2023-01-01' existing = {
-//   name: 'ASP-rgInterestCalculator-976d'
-// }
-
-// resource func_app 'Microsoft.Web/sites@2023-01-01' existing = {
-//   name: 'compound-interest-calculator'
-// }
-
-// resource app_insights 'Microsoft.Insights/components@2020-02-02' existing = {
-//   name: 'ai-compound-interest'
-// }
-
-// output aspId string = asp.id
-// output funcId string = func_app.id
-// output aiId string = app_insights.id
-
 param func_app_name string = 'compound-interest-calculator'
 param location string = resourceGroup().location
 param app_service_plan string = 'ASP-rgInterestCalculator-976d'
@@ -98,3 +82,4 @@ resource asp 'Microsoft.Web/serverfarms@2023-01-01' = {
 
 output func_app_id string = func_app.id
 output func_app_name string = func_app.name
+output url string = func_app.properties.defaultHostName
