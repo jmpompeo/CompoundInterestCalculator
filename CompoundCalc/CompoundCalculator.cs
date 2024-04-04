@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using CompoundCalc.Models.Requests;
 using CompoundCalc.Services;
 using Microsoft.AspNetCore.Http;
@@ -8,18 +9,9 @@ using Newtonsoft.Json;
 
 namespace CompoundCalc;
 
-public class CompoundCalculator
+public class CompoundCalculator(ILogger<CompoundCalculator> logger, CalculationService calculationService)
 {
-    private readonly CalculationService _calculationService;
-    private readonly ILogger<CompoundCalculator> _logger;
-
-    public CompoundCalculator(ILogger<CompoundCalculator> logger, CalculationService calculationService)
-    {
-        _logger = logger;
-        _calculationService = calculationService;
-    }
-
-    [Function("CompoundCalculator")]
+    [Function(nameof(CompoundCalculator))]
     public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous,
         "get")] HttpRequest req)
     {
@@ -27,7 +19,7 @@ public class CompoundCalculator
 
         if (reqBody is null)
         {
-            _logger.LogError("Incoming request body cannot be null");
+            logger.LogError("Incoming request body cannot be null");
 
             return new BadRequestObjectResult("request body cannot be null");
         }
@@ -37,13 +29,13 @@ public class CompoundCalculator
         string? endingBalance;
         try
         {
-            endingBalance = _calculationService.
+            endingBalance = calculationService.
                 GetYearlyAmountWithInterest(intCalcReq);
         }
         catch (Exception ex)
         {
-            _logger.LogError("Error calculating interest {exception}", ex.Message);
-            throw;
+            logger.LogError("Error calculating interest {exception}", ex.Message);
+            return new BadRequestObjectResult("Error calculating interest");
         }
 
         return new OkObjectResult($"Your ending balance is {endingBalance}");

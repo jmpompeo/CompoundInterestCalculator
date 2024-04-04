@@ -16,14 +16,11 @@ public class InterestCalcReq
     }
 
     [Required(ErrorMessage = "Starting balance is required")]
-    [JsonProperty("startingBalance")]
     public double StartingBalance { get; set; }
 
-    [JsonProperty("interestRate")]
     [Required(ErrorMessage = "Interest rate is required")]
     public double InterestRate { get; set; }
 
-    [JsonProperty("years")]
     [Required(ErrorMessage = "Years is required")]
     public int Years { get; set; }
 
