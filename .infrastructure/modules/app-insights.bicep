@@ -1,6 +1,6 @@
 param ai_name string = 'ai-compound-interest'
 param location string = resourceGroup().location
-param law_name string = 'DefaultWorkspace-626071f1-7242-4b4f-b53e-27503f20db66-EUS'
+param law_name string = '/subscriptions/626071f1-7242-4b4f-b53e-27503f20db66/resourcegroups/defaultresourcegroup-eus/providers/microsoft.operationalinsights/workspaces/defaultworkspace-626071f1-7242-4b4f-b53e-27503f20db66-eus'
 
 resource app_insights 'Microsoft.Insights/components@2020-02-02' = {
   name: ai_name
