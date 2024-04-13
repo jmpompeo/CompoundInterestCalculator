@@ -19,19 +19,19 @@ function Start-InterestCalc {
         startingBalance = $StartingBalance
         interestRate = $InterestRate
         years = $Years
-    }
+    } | ConvertTo-Json
 
     $token = (Get-AzAccessToken -ResourceUrl `
     "https://compound-interest-calculator.azurewebsites.net" ).Token
+
+    Write-Host $token
 
     $headers = @{
         Authorization = "Bearer $token"
     }
 
-    $response = Invoke-RestMethod "$uri/api/InterestCalculation" `
-    -Method "GET" -Body ($body | ConvertTo-Json) -Headers $headers
+    $response = Invoke-RestMethod "$uri/api/CompoundCalculator" `
+    -Method "GET" -Body $body -Headers $headers -ContentType 'application/json'
 
     return $response
-
-
 }
