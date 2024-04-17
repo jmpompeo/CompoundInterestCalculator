@@ -7,12 +7,12 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
-namespace CompoundCalc.Functions;
+namespace CompoundCalc;
 
 public class CompoundCalculator(ILogger<CompoundCalculator> logger, CalculationService calculationService)
 {
     [Function(nameof(CompoundCalculator))]
-    public async Task<IActionResult> RunAsync([HttpTrigger(AuthorizationLevel.Anonymous,
+    public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous,
         "get")] HttpRequest req)
     {
         var reqBody = await new StreamReader(req.Body).ReadToEndAsync();
