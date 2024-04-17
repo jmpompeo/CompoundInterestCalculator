@@ -2,10 +2,10 @@ name: Build
 
 on:
   push:
-    branches: [master, 'release/**', 'req/**', 'feature/**']
+    branches: ['req/**', 'feature/**']
   pull_request:
     types: [opened, edited, reopened, review_requested]
-    branches: [master, 'release/**', 'feature/**']
+    branches: [master, 'release/**']
 
 jobs:
   build-and-test:
@@ -15,10 +15,10 @@ jobs:
         dotnet-version: ['8.0.x']
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Setup .NET Core SDK
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '8.0.x'
     
