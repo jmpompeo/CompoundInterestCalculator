@@ -5,7 +5,7 @@ on:
     branches: [master, 'release/**', 'feature/**', 'req/**']
   pull_request:
     types: closed
-    branches: [master, 'release/**', 'feature/**']
+    branches: [master, 'release/**']
 
 jobs:
   build-and-test:
