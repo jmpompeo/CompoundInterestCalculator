@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [master, 'release/**', 'req/**', 'feature/**']
+    branches: 'req/**'
   pull_request:
     types: [opened, edited, reopened, review_requested]
     branches: [master, 'release/**', 'feature/**']
