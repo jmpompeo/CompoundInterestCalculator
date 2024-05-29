@@ -165,5 +165,7 @@ resource trace_anomalies 'microsoft.insights/components/ProactiveDetectionConfig
   }
 }
 
+output instrumentationKey string = app_insights.properties.InstrumentationKey
+
 
 
