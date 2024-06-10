@@ -6,7 +6,9 @@ param location string = resourceGroup().location
 module funcApp 'modules/function-app.bicep' = {
   name: funcAppName
   params: {
-    location: location    
+    location: location
+    sgName: storageAccount.name
+    ai_name: appInsights.name
   }
 }
 
@@ -14,7 +16,7 @@ module appInsights 'modules/app-insights.bicep' = {
   name: appInsightsName
   params: {
     location: location
-  }
+  }  
 }
 
 module storageAccount 'modules/storage.bicep' = {
@@ -27,5 +29,6 @@ module storageAccount 'modules/storage.bicep' = {
 output func_app_name string = funcApp.name
 output func_app_id string = funcApp.outputs.func_app_id
 output func_url string = funcApp.outputs.url
+
 
 
