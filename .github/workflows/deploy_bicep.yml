@@ -22,7 +22,7 @@ jobs:
           resourceGroupName: ${{ secrets.AZURE_RG }}
           template: ./.infrastructure/main.bicep
           failOnStdErr: false
-          scope: /subscriptions/626071f1-7242-4b4f-b53e-27503f20db66/resourceGroups/rgInterestCalculator/providers/Microsoft.Web/sites/compound-interest-calculator
+          scope: 'resourcegroup'
   
 
 
