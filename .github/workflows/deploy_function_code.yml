@@ -28,19 +28,11 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: 'Print Working Directory'
-        run: pwd
-
-      - name: 'List Files in Directory'
-        run: ls
-
+          
       - name: 'Resolve Project Dependencies Using Dotnet'
         shell: pwsh
-        run: |
-          $fullPath = (Resolve-Path -Path "./${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH}}").Path
-          Write-Output "Full Path: $fullPath"
-          pushd $fullPath
+        run: |          
+          pushd './CompoundInterestCalculator/${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
           dotnet build --configuration Release --output ./output
           popd
 
