@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy dotnet core app to Azure Function App - compound-interest-calculator
+name: Deploy Function App
 
 on:
   push:
@@ -29,10 +29,18 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: 'Print Working Directory'
+          run: pwd
+
+      - name: 'List Files in Directory'
+          run: ls
+
       - name: 'Resolve Project Dependencies Using Dotnet'
         shell: pwsh
         run: |
-          pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
+          $fullPath = (Resolve-Path -Path "./${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH}}").Path
+          Write-Output "Full Path: $fullPath"
+          pushd $fullPath
           dotnet build --configuration Release --output ./output
           popd
 
