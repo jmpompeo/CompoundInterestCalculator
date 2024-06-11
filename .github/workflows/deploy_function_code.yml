@@ -29,12 +29,9 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # - name: 'List Directory Contents'
-      #   run: |
-      #     dir 
-      #     dir CompoundCalc
-      #     dir CompoundCalc/bin
-      #     dir CompoundCalc/bin/release
+      - name: 'List Directory Contents'
+        run: |
+          dir 
 
       - name: 'Resolve Project Dependencies Using Dotnet'
         shell: pwsh
