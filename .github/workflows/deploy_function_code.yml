@@ -14,7 +14,7 @@ on:
 
 env:
   AZURE_FUNCTIONAPP_NAME: 'compound-interest-calculator'
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'CompoundCalc/bin/release/net8.0' # set this to the path to your web app project, defaults to the repository root
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'CompoundInterestCalculator/CompoundCalc/bin/release/net8.0' # set this to the path to your web app project, defaults to the repository root
   DOTNET_VERSION: '8.0.x' # set this to the dotnet version to use
 
 jobs:
@@ -32,10 +32,9 @@ jobs:
       - name: 'List Directory Contents'
         run: |
           dir 
-          dir CompoundInterestCalculator
-          dir CompoundInterestCalculator/CompoundCalc
-          dir CompoundInterestCalculator/CompoundCalc/bin
-          dir CompoundInterestCalculator/CompoundCalc/bin/release
+          dir CompoundCalc
+          dir CompoundCalc/bin
+          dir CompoundCalc/bin/release
 
       - name: 'Resolve Project Dependencies Using Dotnet'
         shell: pwsh
