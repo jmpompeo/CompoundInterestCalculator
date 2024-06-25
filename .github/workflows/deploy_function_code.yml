@@ -11,7 +11,7 @@ on:
 
 env:
   AZURE_FUNCTIONAPP_NAME: 'compound-interest-calculator'
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'CompoundInterestCalculator/CompoundCalc/bin/Release/net8.0' # Correct path
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'CompoundCalc/bin/Release/net8.0' # Ensure correct case for 'Release'
   DOTNET_VERSION: '8.0.x' # set this to the dotnet version to use
 
 jobs:
@@ -29,16 +29,16 @@ jobs:
       - name: 'List Directory Contents for Debugging'
         run: |
           dir
-          dir CompoundInterestCalculator
-          dir CompoundInterestCalculator/CompoundCalc
-          dir CompoundInterestCalculator/CompoundCalc/bin
-          dir CompoundInterestCalculator/CompoundCalc/bin/Release
+          dir CompoundCalc
+          dir CompoundCalc/bin
+          dir CompoundCalc/bin/Release
+          dir CompoundCalc/bin/Release/net8.0
 
       - name: 'Resolve Project Dependencies Using Dotnet'
         shell: pwsh
         run: |
-          pushd '${{ github.workspace }}/CompoundInterestCalculator/CompoundCalc'
-          dotnet build --configuration Release --output ${{ github.workspace }}/CompoundInterestCalculator/CompoundCalc/bin/Release/net8.0/output
+          pushd 'CompoundCalc'
+          dotnet build --configuration Release --output bin/Release/net8.0/output
           popd
 
       - name: 'Run Azure Functions Action'
@@ -46,5 +46,5 @@ jobs:
         id: fa
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
-          package: '${{ github.workspace }}/CompoundInterestCalculator/CompoundCalc/bin/Release/net8.0/output'
+          package: 'CompoundCalc/bin/Release/net8.0/output'
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
