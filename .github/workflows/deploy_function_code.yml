@@ -35,7 +35,8 @@ jobs:
 
       - name: 'Resolve Project Dependencies Using Dotnet'
         shell: pwsh
-        run: |                 
+        run: |      
+          cd CompoundInterestCalculator           
           pushd 'CompoundInterestCalculator/${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
           dotnet build --configuration Release --output ./output
           popd
