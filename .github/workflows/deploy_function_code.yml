@@ -26,14 +26,6 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: 'List Directory Contents for Debugging'
-        run: |
-          dir
-          dir CompoundCalc
-          dir CompoundCalc/bin
-          dir CompoundCalc/bin/Release
-          dir CompoundCalc/bin/Release/net8.0
-
       - name: 'Resolve Project Dependencies Using Dotnet'
         shell: pwsh
         run: |
