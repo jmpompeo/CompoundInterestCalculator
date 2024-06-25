@@ -1,6 +1,3 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
 name: Deploy Function App
 
 on:
@@ -14,7 +11,7 @@ on:
 
 env:
   AZURE_FUNCTIONAPP_NAME: 'compound-interest-calculator'
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'CompoundCalc/bin/Release/net8.0' # set this to the path to your web app project, defaults to the repository root
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'CompoundInterestCalculator/CompoundCalc/bin/Release/net8.0' # Correct path
   DOTNET_VERSION: '8.0.x' # set this to the dotnet version to use
 
 jobs:
@@ -29,16 +26,19 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: 'List Directory Contents'
+      - name: 'List Directory Contents for Debugging'
         run: |
-          dir 
+          dir
+          dir CompoundInterestCalculator
+          dir CompoundInterestCalculator/CompoundCalc
+          dir CompoundInterestCalculator/CompoundCalc/bin
+          dir CompoundInterestCalculator/CompoundCalc/bin/Release
 
       - name: 'Resolve Project Dependencies Using Dotnet'
         shell: pwsh
-        run: |      
-          cd CompoundInterestCalculator           
-          pushd 'CompoundInterestCalculator/${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
-          dotnet build --configuration Release --output ./output
+        run: |
+          pushd '${{ github.workspace }}/CompoundInterestCalculator/CompoundCalc'
+          dotnet build --configuration Release --output ${{ github.workspace }}/CompoundInterestCalculator/CompoundCalc/bin/Release/net8.0/output
           popd
 
       - name: 'Run Azure Functions Action'
@@ -46,5 +46,5 @@ jobs:
         id: fa
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
-          package: 'CompoundInterestCalculator/${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
+          package: '${{ github.workspace }}/CompoundInterestCalculator/CompoundCalc/bin/Release/net8.0/output'
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
