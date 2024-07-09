@@ -25,7 +25,14 @@ jobs:
       run: dotnet restore
     
     - name: Build Project
-      run: dotnet build --configuration Release --output ./ouput
+      run: dotnet build --configuration Release
+
+    - name: Copy Projects To Output
+      run: |
+        mkdir -p output
+        for project in $(dotnet sln --list | grep '.csproj' | awk '{print $2}'); do
+          dotnet publish $project --configuration Release --output output/$(basename $project .csproj)
+        done
 
     - name: Run Unit Tests
       run: dotnet test --logger trx --results-directory "TestResults-${{ matrix.dotnet-version }}"
