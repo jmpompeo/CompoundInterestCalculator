@@ -36,8 +36,8 @@ jobs:
       - name: 'Download build artifact'
         uses: actions/download-artifact@v4
         with:
-            name: build-artifacts
-            path: ./
+            name: function-app
+            path: ./output
 
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
