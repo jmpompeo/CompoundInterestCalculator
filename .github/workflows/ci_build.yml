@@ -5,7 +5,7 @@ on:
     branches: [main, 'release/**', 'feature/**', 'req/**']
   pull_request:
     types: closed
-    branches: [main, 'release/**']
+    branches: [main']
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -31,7 +31,7 @@ jobs:
       run: |
         mkdir -p output
         for project in $(dotnet sln --list | grep '.csproj' | awk '{print $2}'); do
-          dotnet publish $project --configuration Release --output output/$(basename $project .csproj)
+          dotnet publish $project --configuration Release --output ${{github.workspace}}/output/$(basename $project .csproj)
         done
 
     - name: Run Unit Tests
@@ -53,5 +53,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: build-artifacts
-        path: ./output
+        path: ${{github.workspace}}/output
 
