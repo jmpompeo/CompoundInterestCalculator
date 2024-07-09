@@ -16,7 +16,7 @@ env:
 
 jobs:
   build-and-deploy:
-    runs-on: windows-latest    
+    runs-on: ubuntu-latest
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
@@ -24,14 +24,10 @@ jobs:
       - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: ${{ env.DOTNET_VERSION }} 
 
-      - name: 'Resolve Project Dependencies Using Dotnet'
-        shell: pwsh
-        run: |
-          pushd 'CompoundCalc'
-          dotnet build --configuration Release --output bin/Release/net8.0/output
-          popd
+      - name: List Content of Output
+        run: ls -R ./output
 
       - name: 'Download build artifact'
         uses: actions/download-artifact@v4

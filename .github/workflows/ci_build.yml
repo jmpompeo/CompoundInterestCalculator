@@ -27,20 +27,6 @@ jobs:
     - name: Build Project
       run: dotnet build --configuration Release
 
-    - name: Copy Projects To Output
-      run: |
-        mkdir -p output
-        for project in $(dotnet sln --list | grep '.csproj' | awk '{print $2}'); do
-          dotnet publish $project --configuration Release --output ${{github.workspace}}/output/$(basename $project .csproj)
-        done
-
-    - name: List Directory Contents After Build
-      run: |
-        echo "Listing contents of the root directory"
-        ls -la
-        echo "Listing contents of the output directory"
-        ls -la ${{ github.workspace }}/output
-
     - name: Run Unit Tests
       run: dotnet test --logger trx --results-directory "TestResults-${{ matrix.dotnet-version }}"
 
