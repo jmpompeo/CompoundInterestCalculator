@@ -25,7 +25,7 @@ jobs:
       run: dotnet restore
     
     - name: Build Project
-      run: dotnet build
+      run: dotnet build --configuration Release --output ./ouput
 
     - name: Run Unit Tests
       run: dotnet test --logger trx --results-directory "TestResults-${{ matrix.dotnet-version }}"
