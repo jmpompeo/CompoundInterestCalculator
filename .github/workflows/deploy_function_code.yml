@@ -30,8 +30,21 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }} 
 
-      - name: List Content of Output
-        run: ls -R ./output
+      - name: Publish Function Apps
+        run: dotnet publish CompoundCalc -c Release -o ./output
+    
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: function-app
+          path: ./output
+
+      # - name: Get Download Artifact
+      #   run : |
+      #     gh api \
+      #     -H "Accept: application/vnd.github+json" \
+      #     -H "X-GitHub-Api-Version: 2022-11-28" \
+      #     /repos/jmpompeo/CompoundInterestCalculator/actions/artifacts?name=function-app
 
       - name: 'Download build artifact'
         uses: actions/download-artifact@v4
