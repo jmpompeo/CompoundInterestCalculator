@@ -42,26 +42,12 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Get Download Artifact
-        run: |
-          artifact_id = $(gh api \
-          -H "Accept: application/vnd.github+json" \
-          -H "Authorization: Bearer ${{env.GH_TOKEN}}"
-          -H "X-GitHub-Api-Version: 2022-11-28" \
-          /repos/jmpompeo/CompoundInterestCalculator/actions/artifacts?name=function-app)
-
-      - name: Download Artifact
-        run: |
-          gh api \
-          -H "Accept: application/vnd.github+json" \
-          -H "X-GitHub-Api-Version: 2022-11-28" \
-          /repos/jmpompeo/CompoundInterestCalculator/actions/artifacts/${artifact_id}/zip
-
-      # - name: 'Download build artifact'
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #       name: function-app
-      #       path: ./output
+      - name: 'Download build artifact'
+        uses: actions/download-artifact@v4
+        with:
+            name: function-app
+            github-token: ${{secrets.GITHUB_TOKEN}}
+            repository: jmpompeo/CompoundInterestCalculator
 
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
