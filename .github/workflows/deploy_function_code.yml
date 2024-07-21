@@ -30,13 +30,23 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }} 
 
+      - name: Install GitHub CLI
+        run: sudo apt-get install gh -y
+
+      - name: Install jq
+        run: sudo apt-get install jq -y
+  
+      - name: Authenticate to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       - name: Get Download Artifact
         run: |
           artifact_id = $(gh api \
           -H "Accept: application/vnd.github+json" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
-          /repos/jmpompeo/CompoundInterestCalculator/actions/artifacts?name=function-app
-          | jq -r --arg-name "function-app" '.artifacts[] | select(.name==$name) | .id')
+          /repos/jmpompeo/CompoundInterestCalculator/actions/artifacts?name=function-app)
 
       - name: Download Artifact
         run: |
