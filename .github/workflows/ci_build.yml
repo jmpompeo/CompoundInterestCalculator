@@ -43,11 +43,11 @@ jobs:
         path: TestResults-${{ matrix.dotnet-version }}
 
     - name: Publish Function Apps
-      run: dotnet publish CompoundCalc -c Release -o output
+      run: dotnet publish CompoundCalc -c Release -o ./output
 
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v4
       with:
         name: function-app
-        path: output
+        path: ./output
 

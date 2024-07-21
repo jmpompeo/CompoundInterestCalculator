@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: 
       - main
+  workflow_run:
+    workflows: ["Build"]
+    types:
+      - completed
   workflow_dispatch:
 
 env:
@@ -27,7 +31,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }} 
 
       - name: List Content of Output
-        run: ls -R output
+        run: ls -R ./output
 
       - name: 'Download build artifact'
         uses: actions/download-artifact@v4
