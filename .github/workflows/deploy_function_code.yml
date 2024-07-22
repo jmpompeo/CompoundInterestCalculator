@@ -15,8 +15,8 @@ on:
 
 env:
   AZURE_FUNCTIONAPP_NAME: 'compound-interest-calculator'
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # Ensure correct case for 'Release'
-  DOTNET_VERSION: '8.0.x' # set this to the dotnet version to use
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: ./CompoundCalc/
+  DOTNET_VERSION: '8.0.x'
   GH_TOKEN: ${{github.token}}
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
         with:
             name: function-app
             github-token: ${{secrets.GITHUB_TOKEN}}
-            repository: jmpompeo/CompoundInterestCalculator
+            
 
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
