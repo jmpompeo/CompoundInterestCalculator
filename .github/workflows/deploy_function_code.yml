@@ -1,16 +1,16 @@
 name: Deploy Function App
 
 on:
-  workflow_run:
-    workflows: ["Build"]
-    types:
-      - completed
   push:
     branches:
       - main
   pull_request:
     branches: 
       - main
+  workflow_run:
+    workflows: ["Build"]
+    types:
+      - completed
 
 env:
   AZURE_FUNCTIONAPP_NAME: 'compound-interest-calculator'
