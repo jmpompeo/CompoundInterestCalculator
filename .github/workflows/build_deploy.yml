@@ -4,14 +4,14 @@ on:
   push:
     branches:
       - main
-      - 'req*'
-      - 'feature*'
-      - 'release*'
+      - 'req**'
+      - 'feature**'
+      - 'release**'
   pull_request:
     branches:
       - main
     paths:
-      - 'release*'
+      - 'release**'
 
 jobs:
   build:
