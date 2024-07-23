@@ -3,9 +3,7 @@ name: Build
 on:
   push:
     branches: [main, 'release/**', 'feature/**', 'req/**']
-  pull_request:
-    types: closed
-    branches: [main']
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
