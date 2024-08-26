@@ -1,0 +1,8 @@
+.links {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .links a {
+    margin-bottom: 10px;
+  }
