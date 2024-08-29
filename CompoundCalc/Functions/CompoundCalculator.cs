@@ -13,7 +13,7 @@ public class CompoundCalculator(ILogger<CompoundCalculator> logger, CalculationS
 {
     [Function(nameof(CompoundCalculator))]
     public async Task<IActionResult> RunAsync([HttpTrigger(AuthorizationLevel.Anonymous,
-        "get")] HttpRequest req)
+        "get", Route = "compoundcalc")] HttpRequest req)
     {
         var reqBody = await new StreamReader(req.Body).ReadToEndAsync();
 
