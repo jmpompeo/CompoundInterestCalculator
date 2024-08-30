@@ -1,7 +1,7 @@
 // src/app/test/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 interface InterestReq {
   startingBalance: number;
