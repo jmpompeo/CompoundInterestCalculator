@@ -11,7 +11,7 @@ on:
 
 env:
   AZURE_FUNCTIONAPP_NAME: 'compound-interest-calculator'
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.'
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'CompoundCalc/bin/Release/net8.0/output'
 
 jobs:
   build-and-deploy:
@@ -37,5 +37,5 @@ jobs:
         id: fa
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
-          package: '${{env.AZURE_FUNCTIONAPP_PACKAGE_PATH}}/out'
+          package: '${{env.AZURE_FUNCTIONAPP_PACKAGE_PATH}}'
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
