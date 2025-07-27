@@ -13,11 +13,11 @@ public class CompoundCalculator(ILogger<CompoundCalculator> logger, CalculationS
 {
     [Function(nameof(CompoundCalculator))]
     public async Task<IActionResult> RunAsync([HttpTrigger(AuthorizationLevel.Anonymous,
-        "get")] HttpRequest req)
+        "post")] HttpRequest req)
     {
         var reqBody = await new StreamReader(req.Body).ReadToEndAsync();
 
-        if (reqBody is null)
+        if (string.IsNullOrWhiteSpace(reqBody))
         {
             logger.LogError("Incoming request body cannot be null");
 
