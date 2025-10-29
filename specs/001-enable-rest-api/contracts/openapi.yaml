@@ -1,0 +1,245 @@
+openapi: 3.0.3
+info:
+  title: Compound Interest REST API
+  version: "1.0.0"
+  description: >
+    Controller-based REST API that calculates compound interest and surfaces health telemetry.
+servers:
+  - url: https://{environment}-calc.example.com
+    description: Environment-specific base URL
+    variables:
+      environment:
+        default: staging
+        enum:
+          - dev
+          - staging
+          - prod
+paths:
+  /api/v1/calculations:
+    post:
+      operationId: postCalculation
+      summary: Calculate compound interest totals
+      tags:
+        - Calculations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculationRequest'
+            examples:
+              basic:
+                summary: Annual compounding example
+                value:
+                  principal: 10000
+                  annualRatePercent: 5.5
+                  compoundingCadence: Annual
+                  durationYears: 10
+                  clientReference: web-form-123
+      responses:
+        '200':
+          description: Successful calculation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationResult'
+              examples:
+                success:
+                  value:
+                    startingPrincipal: 10000
+                    annualRatePercent: 5.5
+                    compoundingCadence: Annual
+                    durationYears: 10
+                    endingBalance: 17081.44
+                    currencyDisplay: "$17,081.44"
+                    calculationVersion: v1.0
+                    traceId: 5f4c1ae40b4d4f6c949742e4115e9a21
+                    responseId: 11111111-2222-3333-4444-555555555555
+        '400':
+          description: Validation error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              examples:
+                missingField:
+                  value:
+                    type: https://calc.example.com/errors/validation
+                    title: Invalid calculation request
+                    status: 400
+                    detail: "durationYears must be between 0 and 99."
+                    traceId: d1b5dd5719614b89a270dc67764c040d
+                    errors:
+                      durationYears:
+                        - durationYears must be between 0 and 99.
+        '500':
+          description: Unexpected error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              examples:
+                serverError:
+                  value:
+                    type: https://calc.example.com/errors/server
+                    title: Calculation failed
+                    status: 500
+                    detail: "Internal calculation error. Try again later."
+                    traceId: d4c1c1ca3a4a4bba934e58f07d5f8ef7
+      security: []
+  /health/ready:
+    get:
+      operationId: readinessProbe
+      summary: Readiness probe
+      tags:
+        - Diagnostics
+      responses:
+        '200':
+          description: Service ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [Healthy, Degraded, Unhealthy]
+                  checks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        status:
+                          type: string
+                        detail:
+                          type: string
+                  version:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+              example:
+                status: Healthy
+                checks:
+                  - name: configuration
+                    status: Healthy
+                    detail: All required settings present.
+                  - name: logging
+                    status: Healthy
+                    detail: Controller telemetry connected.
+                version: 1.0.0
+                timestamp: 2025-10-28T10:00:00Z
+        '503':
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [Degraded, Unhealthy]
+                  reason:
+                    type: string
+                  traceId:
+                    type: string
+              example:
+                status: Unhealthy
+                reason: Pending configuration for telemetry sink.
+                traceId: 6a1d7f9e5ce34704a7c5f7c31e7ed1df
+      security: []
+components:
+  schemas:
+    CalculationRequest:
+      type: object
+      required:
+        - principal
+        - annualRatePercent
+        - compoundingCadence
+        - durationYears
+      properties:
+        principal:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 10000000
+        annualRatePercent:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+        compoundingCadence:
+          type: string
+          enum:
+            - Annual
+            - SemiAnnual
+            - Quarterly
+            - Monthly
+        durationYears:
+          type: integer
+          minimum: 0
+          maximum: 99
+        clientReference:
+          type: string
+          maxLength: 64
+        requestedAt:
+          type: string
+          format: date-time
+    CalculationResult:
+      type: object
+      required:
+        - startingPrincipal
+        - annualRatePercent
+        - compoundingCadence
+        - durationYears
+        - endingBalance
+        - currencyDisplay
+        - calculationVersion
+        - traceId
+        - responseId
+      properties:
+        startingPrincipal:
+          type: number
+          format: decimal
+        annualRatePercent:
+          type: number
+          format: decimal
+        compoundingCadence:
+          type: string
+        durationYears:
+          type: integer
+        endingBalance:
+          type: number
+          format: decimal
+        currencyDisplay:
+          type: string
+        calculationVersion:
+          type: string
+        traceId:
+          type: string
+        responseId:
+          type: string
+          format: uuid
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        traceId:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string

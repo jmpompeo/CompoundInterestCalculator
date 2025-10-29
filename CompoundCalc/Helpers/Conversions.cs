@@ -4,16 +4,12 @@ namespace CompoundCalc.Helpers
 {
     public static class Conversions
     {
-        public static double ConvertPercentageToDecimal(double interestPercentage)
-            => interestPercentage / 100;
+        private static readonly CultureInfo UsCultureInfo = new("en-US");
 
-        public static string ConvertDoubleToCurrency(double money)
-        {
-            var cultureInfo = new CultureInfo("en-US");
+        public static decimal ConvertPercentageToDecimal(decimal interestPercentage)
+            => decimal.Divide(interestPercentage, 100m);
 
-            var stringAmount = money.ToString("C", cultureInfo);
-
-            return stringAmount;
-        }
+        public static string ConvertDecimalToCurrency(decimal money)
+            => money.ToString("C", UsCultureInfo);
     }
 }

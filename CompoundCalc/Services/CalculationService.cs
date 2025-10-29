@@ -1,22 +1,36 @@
-﻿using CompoundCalc.Models.Requests;
-using CompoundCalc.Helpers;
+﻿using CompoundCalc.Helpers;
+using CompoundCalc.Models.Requests;
+using CompoundCalc.Models.Responses;
+using CompoundCalc.Services.Contracts;
 
-namespace CompoundCalc.Services
+namespace CompoundCalc.Services;
+
+public sealed class CalculationService : ICalculationService
 {
-    public class CalculationService
+    private const string DefaultCalculationVersion = "v1.0";
+    private const string DefaultCompoundingCadence = "Annual";
+
+    public CalculationResult CalculateCompoundInterest(InterestCalcReq request)
     {
-        public string? GetYearlyAmountWithInterest(InterestCalcReq req)
+        ArgumentNullException.ThrowIfNull(request);
+
+        var principal = request.StartingBalance;
+        var ratePerPeriod = Conversions.ConvertPercentageToDecimal(request.InterestRate);
+        var totalPeriods = request.Years;
+
+        var balance = principal;
+        for (var period = 0; period < totalPeriods; period++)
         {
-            var percentConversion = Conversions.
-                ConvertPercentageToDecimal(req.InterestRate);
-
-            for (int i = 0; i < req.Years; i++)
-            {
-                var interest = req.StartingBalance * percentConversion;
-                req.StartingBalance += interest;
-            }
-
-            return Conversions.ConvertDoubleToCurrency(req.StartingBalance);
+            balance += balance * ratePerPeriod;
         }
+
+        return CalculationResult.Create(
+            startingPrincipal: principal,
+            annualRatePercent: request.InterestRate,
+            compoundingCadence: DefaultCompoundingCadence,
+            durationYears: request.Years,
+            endingBalance: balance,
+            currencyFormatter: Conversions.ConvertDecimalToCurrency,
+            calculationVersion: DefaultCalculationVersion);
     }
 }
