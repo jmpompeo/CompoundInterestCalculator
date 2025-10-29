@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+.git/
+.gitignore
+Dockerfile*
+**/*.user
+**/*.suo
+**/*.csproj.user
+*.swp
+*.log
+TestResults/
+.nuget/
+node_modules/
+.env*

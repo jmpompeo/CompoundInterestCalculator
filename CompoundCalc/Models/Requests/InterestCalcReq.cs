@@ -5,8 +5,8 @@ namespace CompoundCalc.Models.Requests;
 
 public class InterestCalcReq
 {
-    public InterestCalcReq(double startingBalance,
-     double interestRate, int years)
+    public InterestCalcReq(decimal startingBalance,
+     decimal interestRate, int years)
     {
         StartingBalance = startingBalance;
         InterestRate = interestRate;
@@ -16,10 +16,10 @@ public class InterestCalcReq
     }
 
     [Required(ErrorMessage = "Starting balance is required")]
-    public double StartingBalance { get; set; }
+    public decimal StartingBalance { get; set; }
 
     [Required(ErrorMessage = "Interest rate is required")]
-    public double InterestRate { get; set; }
+    public decimal InterestRate { get; set; }
 
     [Required(ErrorMessage = "Years is required")]
     public int Years { get; set; }
