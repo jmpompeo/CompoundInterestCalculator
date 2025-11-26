@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const distDir = resolve(here, '../dist');
-const apiStaticDir = resolve(here, '../../api/CompoundInterestCalculator.Api/wwwroot');
+const apiStaticDir = resolve(here, '../../../api/CompoundInterestCalculator.Api/wwwroot');
 
 try {
   await stat(distDir);
