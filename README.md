@@ -63,7 +63,8 @@ Render dashboard, point it at this repository, and choose the Free plan. Render 
 Dockerfile, sets `ASPNETCORE_ENVIRONMENT=Production`, and exposes the readiness probe at
 `/health/ready`. The GitHub Actions workflow `.github/workflows/ci_build.yml` restores, builds, tests,
 and (when changes land on `main`) pings the Render deploy hook stored in the `RENDER_DEPLOY_HOOK`
-secret so production stays up to date. The detailed setup steps live in `docs/deployment.md`.
+secret so production stays up to date. The detailed setup steps live in `docs/deployment.md`. The hosted
+Swagger UI is always available at `/swagger` for interactive testing once the service is running.
 
 ## Telemetry & Logging
 
