@@ -1,61 +1,40 @@
-# Deployment Guide
+# Deployment Guide (Render Free Tier)
 
-This guide explains how to deploy the controller-based REST API to Azure App Service using the
-provided GitHub Actions workflow.
+The API deploys to Render via the `render.yaml` blueprint and the Dockerfile at the repository root.
+Render automatically builds and runs the container whenever you push to `main` or click **Manual
+Deploy** in the Render dashboard.
 
 ## Prerequisites
 
-- Azure App Service (Linux) created for the API
-- Application Insights resource linked to the web app
-- GitHub repository secrets configured:
-  - `AZURE_WEBAPP_NAME`: Name of the target App Service
-  - `AZURE_WEBAPP_PUBLISH_PROFILE`: Publish profile XML for the App Service
-- Optional: Deployment slot configured for staging validations
+- Render account with GitHub access enabled.
+- This repository connected to Render (click **Add New > Blueprint** and point Render to the GitHub
+  repo URL).
+- Optional: custom domain managed through Render.
 
-## CI/CD Workflow
+## Provision the Web Service
 
-1. Update the repository with your changes.
-2. Push to `main` (or trigger the workflow manually via the Actions tab).
-3. GitHub Actions workflow `.github/workflows/api-deploy.yml` runs the following steps:
-   - Restores dependencies.
-   - Builds the solution in Release configuration.
-   - Executes unit and integration tests.
-   - Publishes the API to `./publish`.
-   - Deploys the published assets to Azure using the publish profile secret.
-4. Monitor the workflow for completion and review logs for any failures.
-
-## Manual Deployment (Optional)
-
-1. Publish locally:
-   ```bash
-   dotnet publish api/CompoundInterestCalculator.Api/CompoundInterestCalculator.Api.csproj \
-     --configuration Release --output ./publish
-   ```
-2. Deploy using the Azure CLI:
-   ```bash
-   az webapp deploy \
-     --name "$AZURE_WEBAPP_NAME" \
-     --resource-group "$RESOURCE_GROUP" \
-     --src-path ./publish
-   ```
-3. Confirm the deployment via the readiness endpoint:
-   ```bash
-   curl https://$AZURE_WEBAPP_NAME.azurewebsites.net/health/ready | jq
-   ```
+1. After importing the repo as a Blueprint, Render detects `render.yaml` and shows the `compound-interest-api`
+   service definition.
+2. Choose the **Free** plan and your preferred region (the file defaults to `oregon`, you can change this
+   in the dashboard before creating the service).
+3. Confirm the Dockerfile path (`./Dockerfile`) and health check (`/health/ready`).
+4. Create the resources. Render builds the container, runs `dotnet publish`, and boots the API bound to the
+   platform-provided `$PORT`.
 
 ## Environment Configuration
 
-Place environment-specific overrides in `api/appsettings.{Environment}.json`. Sensitive values (e.g.,
-Application Insights connection strings) should be stored in App Service application settings or Azure
-Key Vault. Ensure the following settings are present:
+Environment variables live in the Render dashboard under **Environment**. The blueprint sets
+`ASPNETCORE_ENVIRONMENT=Production`. Add any custom settings there (for example, feature flags or
+logging tweaks). Changing an environment variable triggers a rolling deploy.
 
-- `ApplicationInsights:ConnectionString`
-- `Logging:LogLevel` overrides for controller logging if needed
-- Optional feature flags for enabling additional cadences
+## Deployments
 
-## Post-Deployment Checklist
+- Pushing to `main` automatically kicks off a new deploy because the Render service is linked to GitHub.
+- Manual redeploys are available from the Render dashboard (**Deploys > Manual Deploy**).
+- Watch build logs in Render to verify restore/build/test/publish succeeded inside the container.
 
-- Verify `/api/v1/calculations` responds successfully with known test inputs.
-- Validate `/health/ready` returns `Healthy` and includes the latest version.
-- Confirm Application Insights is receiving telemetry with correlation identifiers.
-- Update release notes or changelog as appropriate.
+## Post-Deployment Checks
+
+- `GET https://<your-service>.onrender.com/health/ready` returns `Healthy` plus version metadata.
+- `POST https://<your-service>.onrender.com/api/v1/calculations` exercises the API end-to-end.
+- Render streams container logs; use them to confirm correlation IDs appear for the requests above.

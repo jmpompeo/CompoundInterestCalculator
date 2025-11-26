@@ -16,8 +16,6 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddApplicationInsightsTelemetry();
 builder.Services
     .AddControllers()
     .AddJsonOptions(options =>
@@ -56,8 +54,7 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddProblemDetails();
 
 builder.Services.AddHealthChecks()
-    .AddCheck("configuration", () => HealthCheckResult.Healthy("Configuration settings resolved"))
-    .AddCheck("telemetry", () => HealthCheckResult.Healthy("Telemetry pipeline configured"));
+    .AddCheck("configuration", () => HealthCheckResult.Healthy("Configuration settings resolved"));
 
 builder.Services.AddScoped<ICalculationService, CalculationService>();
 builder.Services.AddSingleton<CalculationMapper>();

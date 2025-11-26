@@ -58,14 +58,14 @@ dotnet test
 
 ## Deployment
 
-A GitHub Actions workflow (`.github/workflows/api-deploy.yml`) builds, tests, and deploys the API to
-Azure App Service. Configure repository secrets `AZURE_WEBAPP_NAME` and
-`AZURE_WEBAPP_PUBLISH_PROFILE` before enabling the workflow. See `docs/deployment.md` for the full
-checklist.
+Render handles deployment using the provided `render.yaml` blueprint. Create a new Web Service from the
+Render dashboard, point it at this repository, and choose the Free plan. Render builds the API via the
+Dockerfile, sets `ASPNETCORE_ENVIRONMENT=Production`, and exposes the readiness probe at
+`/health/ready`. The detailed setup steps live in `docs/deployment.md`.
 
 ## Telemetry & Logging
 
-- Correlation IDs are propagated via the `x-correlation-id` header and included in Application Insights
-  traces.
+- Correlation IDs are propagated via the `x-correlation-id` header and included in every structured log.
 - Validation and server errors emit structured controller logs explaining why requests failed.
-- Application Insights can be configured via `appsettings.{Environment}.json` or App Service settings.
+- Logs stream to stdout/stderr for collection by the hosting platform (Render keeps 30 days on the
+  free tier).
