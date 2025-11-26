@@ -1,16 +1,21 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using CompoundCalc.Helpers;
+using System.ComponentModel.DataAnnotations;
 using Newtonsoft.Json;
 
 namespace CompoundCalc.Models.Requests;
 
 public class InterestCalcReq
 {
-    public InterestCalcReq(decimal startingBalance,
-     decimal interestRate, int years)
+    public InterestCalcReq(
+        decimal startingBalance,
+        decimal interestRate,
+        int years,
+        string compoundingCadence = "Annual")
     {
         StartingBalance = startingBalance;
         InterestRate = interestRate;
         Years = years;
+        CompoundingCadence = CompoundingCadenceOptions.NormalizeName(compoundingCadence);
 
         ValidateParams();
     }
@@ -23,6 +28,9 @@ public class InterestCalcReq
 
     [Required(ErrorMessage = "Years is required")]
     public int Years { get; set; }
+
+    [Required(ErrorMessage = "Compounding cadence is required")]
+    public string CompoundingCadence { get; }
 
     public void ValidateParams()
     {
@@ -40,6 +48,11 @@ public class InterestCalcReq
         {
             throw new ArgumentOutOfRangeException
                 ("The number of years needs to be between 0-100");
+        }
+
+        if (!CompoundingCadenceOptions.IsSupported(CompoundingCadence))
+        {
+            throw new ArgumentException("Unsupported compounding cadence.");
         }
     }
 }

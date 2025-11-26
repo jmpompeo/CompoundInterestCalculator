@@ -8,15 +8,17 @@ namespace CompoundCalc.Services;
 public sealed class CalculationService : ICalculationService
 {
     private const string DefaultCalculationVersion = "v1.0";
-    private const string DefaultCompoundingCadence = "Annual";
 
     public CalculationResult CalculateCompoundInterest(InterestCalcReq request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         var principal = request.StartingBalance;
-        var ratePerPeriod = Conversions.ConvertPercentageToDecimal(request.InterestRate);
-        var totalPeriods = request.Years;
+        var cadenceName = request.CompoundingCadence;
+        var periodsPerYear = CompoundingCadenceOptions.GetPeriodsPerYear(cadenceName);
+        var annualRate = Conversions.ConvertPercentageToDecimal(request.InterestRate);
+        var ratePerPeriod = decimal.Divide(annualRate, periodsPerYear);
+        var totalPeriods = request.Years * periodsPerYear;
 
         var balance = principal;
         for (var period = 0; period < totalPeriods; period++)
@@ -27,7 +29,7 @@ public sealed class CalculationService : ICalculationService
         return CalculationResult.Create(
             startingPrincipal: principal,
             annualRatePercent: request.InterestRate,
-            compoundingCadence: DefaultCompoundingCadence,
+            compoundingCadence: cadenceName,
             durationYears: request.Years,
             endingBalance: balance,
             currencyFormatter: Conversions.ConvertDecimalToCurrency,

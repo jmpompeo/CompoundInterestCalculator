@@ -8,7 +8,7 @@ namespace CompoundInterestCalculator.Api.Mappers;
 public sealed class CalculationMapper
 {
     public InterestCalcReq ToDomain(CalculationRequestDto request)
-        => new(request.Principal, request.AnnualRatePercent, request.DurationYears);
+        => new(request.Principal, request.AnnualRatePercent, request.DurationYears, request.CompoundingCadence);
 
     public CalculationResponseDto ToResponse(
         CalculationRequestDto request,
@@ -20,7 +20,7 @@ public sealed class CalculationMapper
         {
             StartingPrincipal = result.StartingPrincipal,
             AnnualRatePercent = result.AnnualRatePercent,
-            CompoundingCadence = request.CompoundingCadence,
+            CompoundingCadence = result.CompoundingCadence,
             DurationYears = result.DurationYears,
             EndingBalance = result.EndingBalance,
             CurrencyDisplay = result.CurrencyDisplay,

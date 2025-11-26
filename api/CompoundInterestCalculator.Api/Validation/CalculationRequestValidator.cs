@@ -1,4 +1,4 @@
-using System.Linq;
+using CompoundCalc.Helpers;
 using CompoundInterestCalculator.Api.Models.Requests;
 using FluentValidation;
 
@@ -6,8 +6,6 @@ namespace CompoundInterestCalculator.Api.Validation;
 
 public sealed class CalculationRequestValidator : AbstractValidator<CalculationRequestDto>
 {
-    private static readonly string[] SupportedCadences = { "Annual", "SemiAnnual", "Quarterly", "Monthly" };
-
     public CalculationRequestValidator()
     {
         RuleFor(x => x.Principal)
@@ -18,8 +16,8 @@ public sealed class CalculationRequestValidator : AbstractValidator<CalculationR
 
         RuleFor(x => x.CompoundingCadence)
             .NotEmpty()
-            .Must(cadence => SupportedCadences.Contains(cadence))
-            .WithMessage("Compounding cadence must be one of Annual, SemiAnnual, Quarterly, or Monthly.");
+            .Must(CompoundingCadenceOptions.IsSupported)
+            .WithMessage($"Compounding cadence must be one of {string.Join(", ", CompoundingCadenceOptions.SupportedCadences)}.");
 
         RuleFor(x => x.DurationYears)
             .InclusiveBetween(0, 99);

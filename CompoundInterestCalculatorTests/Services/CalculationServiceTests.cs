@@ -1,3 +1,4 @@
+using CompoundCalc.Helpers;
 using CompoundCalc.Models.Requests;
 using CompoundCalc.Services;
 
@@ -14,7 +15,7 @@ public class CalculationServiceTests
 
         var result = _service.CalculateCompoundInterest(request);
 
-        var expected = ComputeExpectedBalance(10000m, 5.5m, 10);
+        var expected = ComputeExpectedBalance(10000m, 5.5m, 10, "Annual");
 
         Assert.Equal(expected, result.EndingBalance);
         Assert.Equal("$17,081.44", result.CurrencyDisplay);
@@ -44,11 +45,33 @@ public class CalculationServiceTests
         Assert.Equal("$2,500.00", result.CurrencyDisplay);
     }
 
-    private static decimal ComputeExpectedBalance(decimal principal, decimal annualRatePercent, int years)
+    [Theory]
+    [InlineData("SemiAnnual", 5000, 4.5, 5)]
+    [InlineData("Quarterly", 3200, 6.25, 3)]
+    [InlineData("Monthly", 1000, 5.0, 1)]
+    public void CalculateCompoundInterest_UsesCompoundingCadence(
+        string cadence,
+        decimal principal,
+        decimal annualRatePercent,
+        int durationYears)
     {
-        var rate = annualRatePercent / 100m;
+        var request = new InterestCalcReq(principal, annualRatePercent, durationYears, cadence);
+
+        var result = _service.CalculateCompoundInterest(request);
+
+        var expected = ComputeExpectedBalance(principal, annualRatePercent, durationYears, cadence);
+
+        Assert.Equal(expected, result.EndingBalance);
+        Assert.Equal(cadence, result.CompoundingCadence);
+    }
+
+    private static decimal ComputeExpectedBalance(decimal principal, decimal annualRatePercent, int years, string cadence)
+    {
+        var periodsPerYear = CompoundingCadenceOptions.GetPeriodsPerYear(cadence);
+        var rate = decimal.Divide(annualRatePercent, 100m * periodsPerYear);
         var balance = principal;
-        for (var i = 0; i < years; i++)
+        var totalPeriods = years * periodsPerYear;
+        for (var i = 0; i < totalPeriods; i++)
         {
             balance += balance * rate;
         }
