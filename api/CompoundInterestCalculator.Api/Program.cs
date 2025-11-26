@@ -104,6 +104,13 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 
 app.MapControllers();
 
+app.MapGet("/", () => Results.Json(new
+{
+    message = "Compound Interest Calculator API",
+    documentation = "/swagger",
+    readiness = "/health/ready"
+}));
+
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     ResponseWriter = async (context, report) =>
