@@ -286,6 +286,8 @@ FakesAssemblies/
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
+src/web/dist/
+api/CompoundInterestCalculator.Api/wwwroot/
 
 # Visual Studio 6 build log
 *.plg
@@ -370,5 +372,3 @@ Scripts/arm-templates/
 
 .codex
 .specify
-
-

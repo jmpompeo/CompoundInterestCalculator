@@ -31,12 +31,14 @@ logging tweaks). Changing an environment variable triggers a rolling deploy.
 
 - Pushing to `main` automatically kicks off a new deploy because the Render service is linked to GitHub.
 - Manual redeploys are available from the Render dashboard (**Deploys > Manual Deploy**).
-- Watch build logs in Render to verify restore/build/test/publish succeeded inside the container.
+- Watch build logs in Render to verify restore/build/test/publish succeeded inside the container. The Dockerfile
+  installs Node 20, runs `pnpm build` within `src/web`, and copies the compiled SPA into
+  `api/CompoundInterestCalculator.Api/wwwroot` before ASP.NET Core is published.
 
 ## CI/CD Workflow
 
-- `.github/workflows/ci_build.yml` runs for every push/PR, restoring dependencies, building in Release,
-  running the tests, and checking formatting.
+- `.github/workflows/ci_build.yml` runs for every push/PR, building the frontend with pnpm, restoring
+  .NET dependencies, compiling in Release, running the tests, and checking formatting.
 - When the workflow runs on `main`, the `deploy` job calls the Render Deploy Hook stored in the
   `RENDER_DEPLOY_HOOK` repository secret. Configure the hook URL from the Render dashboard
   (**Deploy Hooks > Manual Deploy Hook**) and paste it into the secret so production deployments stay automated.

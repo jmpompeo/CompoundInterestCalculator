@@ -16,16 +16,35 @@ specs/001-enable-rest-api/              # Feature documentation, plan, contracts
 
 ## Running Locally
 
-1. Restore dependencies and build:
+1. Restore .NET dependencies:
    ```bash
    dotnet restore
-   dotnet build
    ```
-2. Run the API:
+2. Prepare the frontend workspace (requires Node 20+; `corepack` ships with Node):
    ```bash
-   dotnet run --project api/CompoundInterestCalculator.Api/CompoundInterestCalculator.Api.csproj
+   cd src/web
+   corepack enable pnpm
+   pnpm install
+   cd ../../
    ```
-3. Call the calculation endpoint:
+   _If `corepack enable pnpm` needs elevated permissions (Homebrew installs on macOS often do), rerun it
+   with `sudo` or install pnpm globally._
+3. For API + UI development you have two options:
+   - **Run the Vite dev server** for instant UI feedback while keeping the API on its normal ports:
+     ```bash
+     # terminal 1
+     pnpm --dir src/web dev
+
+     # terminal 2
+     dotnet run --project api/CompoundInterestCalculator.Api/CompoundInterestCalculator.Api.csproj
+     ```
+     The Vite dev server proxies `/api` calls to the ASP.NET backend.
+   - **Build the SPA into `wwwroot`** and let ASP.NET serve it (mirrors the production setup):
+     ```bash
+     pnpm --dir src/web build   # copies dist files into api/CompoundInterestCalculator.Api/wwwroot
+     dotnet run --project api/CompoundInterestCalculator.Api/CompoundInterestCalculator.Api.csproj
+     ```
+4. Call the calculation endpoint (or use the new UI at `http://localhost:5032/` when running via ASP.NET):
    ```bash
    curl -s \
      -X POST http://localhost:5000/api/v1/calculations \
@@ -38,7 +57,14 @@ specs/001-enable-rest-api/              # Feature documentation, plan, contracts
        "clientReference": "local-test"
      }' | jq
    ```
-4. Inspect logs in the console for correlation IDs and validation messages.
+5. Inspect logs in the console for correlation IDs and validation messages.
+
+## Frontend UI (src/web)
+
+- Vite + React + TypeScript with Tailwind CSS provides a small but extensible SPA.
+- `pnpm dev` (inside `src/web`) spins up the standalone UI with hot reload and proxies API calls to `http://localhost:5032`.
+- `pnpm build` compiles the assets and automatically copies them into `api/CompoundInterestCalculator.Api/wwwroot` so ASP.NET Core serves the same bundle you'll deploy to Render.
+- The UI currently includes a responsive form, inline validation, cadence selector cards, and a results panel that surfaces ending balance, metadata, and trace identifiers returned from the API.
 
 ## Endpoints
 

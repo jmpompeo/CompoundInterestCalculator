@@ -14,6 +14,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Reflection;
+using System.IO;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
@@ -85,6 +86,11 @@ var app = builder.Build();
 
 var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
 
+if (!string.IsNullOrWhiteSpace(app.Environment.WebRootPath))
+{
+    Directory.CreateDirectory(app.Environment.WebRootPath);
+}
+
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
@@ -97,16 +103,12 @@ app.UseSwaggerUI(options =>
 
 app.UseHttpsRedirection();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseMiddleware<CorrelationIdMiddleware>();
 
 app.MapControllers();
-
-app.MapGet("/", () => Results.Json(new
-{
-    message = "Compound Interest Calculator API",
-    documentation = "/swagger",
-    readiness = "/health/ready"
-}));
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
@@ -130,6 +132,24 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
         await context.Response.WriteAsJsonAsync(payload);
     }
 });
+
+var spaIndexFile = string.IsNullOrWhiteSpace(app.Environment.WebRootPath)
+    ? null
+    : Path.Combine(app.Environment.WebRootPath, "index.html");
+
+if (!string.IsNullOrEmpty(spaIndexFile) && File.Exists(spaIndexFile))
+{
+    app.MapFallbackToFile("/index.html");
+}
+else
+{
+    app.MapGet("/", () => Results.Json(new
+    {
+        message = "Frontend assets not found. Run `pnpm install && pnpm build` inside src/web to generate the UI.",
+        documentation = "/swagger",
+        readiness = "/health/ready"
+    }));
+}
 
 app.Run();
 
