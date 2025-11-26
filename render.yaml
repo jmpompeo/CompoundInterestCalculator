@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: compound-interest-api
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health/ready
+    numInstances: 1
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
