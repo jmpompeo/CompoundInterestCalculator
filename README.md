@@ -61,7 +61,9 @@ dotnet test
 Render handles deployment using the provided `render.yaml` blueprint. Create a new Web Service from the
 Render dashboard, point it at this repository, and choose the Free plan. Render builds the API via the
 Dockerfile, sets `ASPNETCORE_ENVIRONMENT=Production`, and exposes the readiness probe at
-`/health/ready`. The detailed setup steps live in `docs/deployment.md`.
+`/health/ready`. The GitHub Actions workflow `.github/workflows/ci_build.yml` restores, builds, tests,
+and (when changes land on `main`) pings the Render deploy hook stored in the `RENDER_DEPLOY_HOOK`
+secret so production stays up to date. The detailed setup steps live in `docs/deployment.md`.
 
 ## Telemetry & Logging
 

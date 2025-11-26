@@ -5,7 +5,6 @@
 
 ## Frameworks & Libraries
 - ASP.NET Core MVC
-- Application Insights
 - Newtonsoft.Json (legacy contract parity)
 - FluentValidation
 - ASP.NET Core Health Checks
@@ -17,4 +16,5 @@
 - Backend API (`api/` project)
 
 ## Notes
-- Conversion from Azure Function to controller-based REST API requires deterministic decimal calculations and structured telemetry.
+- Conversion from the legacy function implementation to a controller-based REST API requires deterministic decimal calculations and structured telemetry.
+- Deployments target the Render free tier using the repo-level Dockerfile and deploy hook.

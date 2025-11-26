@@ -33,6 +33,14 @@ logging tweaks). Changing an environment variable triggers a rolling deploy.
 - Manual redeploys are available from the Render dashboard (**Deploys > Manual Deploy**).
 - Watch build logs in Render to verify restore/build/test/publish succeeded inside the container.
 
+## CI/CD Workflow
+
+- `.github/workflows/ci_build.yml` runs for every push/PR, restoring dependencies, building in Release,
+  running the tests, and checking formatting.
+- When the workflow runs on `main`, the `deploy` job calls the Render Deploy Hook stored in the
+  `RENDER_DEPLOY_HOOK` repository secret. Configure the hook URL from the Render dashboard
+  (**Deploy Hooks > Manual Deploy Hook**) and paste it into the secret so production deployments stay automated.
+
 ## Post-Deployment Checks
 
 - `GET https://<your-service>.onrender.com/health/ready` returns `Healthy` plus version metadata.
