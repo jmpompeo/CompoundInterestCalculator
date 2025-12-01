@@ -1,100 +1,44 @@
-# Compound Interest Calculator API
+# Compound Interest Calculator
 
-The Compound Interest Calculator has been migrated from an Azure Function to an ASP.NET Core
-controller-based REST API. The service exposes stable, versioned endpoints for compound interest
-calculations while preserving the legacy deterministic math and adding stronger logging and
-observability.
+This project turns a legacy Azure Function into a full ASP.NET Core web experience for calculating
+compound interest. The API guarantees deterministic decimal math, surfaces detailed metadata for
+traceability, and ships with a lightweight React UI so people can experiment with cadences, interest
+rates, and time horizons without writing code.
 
-## Project Structure
+## What It Does
 
-```text
-api/CompoundInterestCalculator.Api/     # ASP.NET Core Web API project
-CompoundCalc/                           # Domain services, models, helpers
-CompoundInterestCalculatorTests/        # Unit and integration test suite
-specs/001-enable-rest-api/              # Feature documentation, plan, contracts, tasks
-```
+- `POST /api/v1/calculations` receives principal, annual rate, cadence, and duration, then returns the
+  ending balance along with currency formatting, calculation version, and correlation identifiers.
+- FluentValidation enforces business rules (principal, rates, cadence support, request metadata) and
+  emits RFC 7807 responses that include the same trace ID seen in logs.
+- Structured telemetry logs every request with a propagated `x-correlation-id`, plus dedicated events
+  for validation failures and unexpected exceptions.
+- The bundled SPA highlights the API output, echoes trace IDs, and walks users through picking a
+  compounding schedule so the backend and frontend always stay in sync.
+
+## Tech Highlights
+
+- .NET 8 Web API with API versioning, Swagger UI, and readiness health checks for Render deployments.
+- Deterministic decimal math lives in a separate `CompoundCalc` domain assembly that can be reused in
+  other workloads or tested in isolation.
+- React 18 + Vite + Tailwind provide the UI, while a small Node script copies the build artifacts into
+  `wwwroot` so ASP.NET Core serves the same bundle in development and production.
 
 ## Running Locally
 
-1. Restore .NET dependencies:
+1. Restore the API and test dependencies:
    ```bash
    dotnet restore
    ```
-2. Prepare the frontend workspace (requires Node 20+; `corepack` ships with Node):
+2. Install web dependencies and build the SPA (copied into the API's `wwwroot`):
    ```bash
-   cd src/web
-   corepack enable pnpm
-   pnpm install
-   cd ../../
+   pnpm --dir src/web install
+   pnpm --dir src/web build
    ```
-   _If `corepack enable pnpm` needs elevated permissions (Homebrew installs on macOS often do), rerun it
-   with `sudo` or install pnpm globally._
-3. For API + UI development you have two options:
-   - **Run the Vite dev server** for instant UI feedback while keeping the API on its normal ports:
-     ```bash
-     # terminal 1
-     pnpm --dir src/web dev
-
-     # terminal 2
-     dotnet run --project api/CompoundInterestCalculator.Api/CompoundInterestCalculator.Api.csproj
-     ```
-     The Vite dev server proxies `/api` calls to the ASP.NET backend.
-   - **Build the SPA into `wwwroot`** and let ASP.NET serve it (mirrors the production setup):
-     ```bash
-     pnpm --dir src/web build   # copies dist files into api/CompoundInterestCalculator.Api/wwwroot
-     dotnet run --project api/CompoundInterestCalculator.Api/CompoundInterestCalculator.Api.csproj
-     ```
-4. Call the calculation endpoint (or use the new UI at `http://localhost:5032/` when running via ASP.NET):
+3. Run the API (serves JSON + SPA on the standard ASP.NET ports):
    ```bash
-   curl -s \
-     -X POST http://localhost:5000/api/v1/calculations \
-     -H "Content-Type: application/json" \
-     -d '{
-       "principal": 5000,
-       "annualRatePercent": 4.25,
-       "compoundingCadence": "Annual",
-       "durationYears": 5,
-       "clientReference": "local-test"
-     }' | jq
+   dotnet run --project api/CompoundInterestCalculator.Api/CompoundInterestCalculator.Api.csproj
    ```
-5. Inspect logs in the console for correlation IDs and validation messages.
 
-## Frontend UI (src/web)
-
-- Vite + React + TypeScript with Tailwind CSS provides a small but extensible SPA.
-- `pnpm dev` (inside `src/web`) spins up the standalone UI with hot reload and proxies API calls to `http://localhost:5032`.
-- `pnpm build` compiles the assets and automatically copies them into `api/CompoundInterestCalculator.Api/wwwroot` so ASP.NET Core serves the same bundle you'll deploy to Render.
-- The UI currently includes a responsive form, inline validation, cadence selector cards, and a results panel that surfaces ending balance, metadata, and trace identifiers returned from the API.
-
-## Endpoints
-
-- `POST /api/v1/calculations`
-  - Calculates compound interest with decimal precision and returns metadata including trace and
-    response identifiers.
-  - Validation errors return RFC 7807 problem details with the same correlation token present in logs.
-- `GET /health/ready`
-  - Reports readiness status, aggregated health check details, and the deployed version.
-
-## Testing
-
-Run the complete suite (unit + integration):
-```bash
-dotnet test
-```
-
-## Deployment
-
-Render handles deployment using the provided `render.yaml` blueprint. Create a new Web Service from the
-Render dashboard, point it at this repository, and choose the Free plan. Render builds the API via the
-Dockerfile, sets `ASPNETCORE_ENVIRONMENT=Production`, and exposes the readiness probe at
-`/health/ready`. The GitHub Actions workflow `.github/workflows/ci_build.yml` restores, builds, tests,
-and (when changes land on `main`) pings the Render deploy hook stored in the `RENDER_DEPLOY_HOOK`
-secret so production stays up to date. The detailed setup steps live in `docs/deployment.md`. The hosted
-Swagger UI is always available at `/swagger` for interactive testing once the service is running.
-
-## Telemetry & Logging
-
-- Correlation IDs are propagated via the `x-correlation-id` header and included in every structured log.
-- Validation and server errors emit structured controller logs explaining why requests failed.
-- Logs stream to stdout/stderr for collection by the hosting platform (Render keeps 30 days on the
-  free tier).
+Call the calculator with `curl`/Postman or open `http://localhost:5032` to use the UI. Execute
+`dotnet test` any time you want to run the integration and unit suites that validate the API contract.

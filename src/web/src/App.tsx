@@ -159,9 +159,9 @@ export default function App() {
                   <span className="text-sm font-medium text-slate-200">Principal ($)</span>
                   <input
                     type="number"
-                    inputMode="decimal"
+                    inputMode="numeric"
                     min={0}
-                    step={100}
+                    step={1}
                     className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2 text-base text-white focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
                     value={form.principal}
                     onChange={event => handleChange('principal', event.target.value)}
