@@ -10,11 +10,13 @@ public class InterestCalcReq
         decimal startingBalance,
         decimal interestRate,
         int years,
+        decimal monthlyContribution,
         string compoundingCadence = "Annual")
     {
         StartingBalance = startingBalance;
         InterestRate = interestRate;
         Years = years;
+        MonthlyContribution = monthlyContribution;
         CompoundingCadence = CompoundingCadenceOptions.NormalizeName(compoundingCadence);
 
         ValidateParams();
@@ -31,6 +33,8 @@ public class InterestCalcReq
 
     [Required(ErrorMessage = "Compounding cadence is required")]
     public string CompoundingCadence { get; }
+
+    public decimal MonthlyContribution { get; set; }
 
     public void ValidateParams()
     {
@@ -53,6 +57,11 @@ public class InterestCalcReq
         if (!CompoundingCadenceOptions.IsSupported(CompoundingCadence))
         {
             throw new ArgumentException("Unsupported compounding cadence.");
+        }
+
+        if (MonthlyContribution < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MonthlyContribution), "Monthly contribution cannot be negative.");
         }
     }
 }

@@ -18,7 +18,7 @@ public class ControllerLoggingTests : IClassFixture<LoggingTestFactory>
     }
 
     [Fact]
-    public async Task PostCalculations_WhenValidationFails_LogsPlainLanguageReason()
+    public async Task ContributionGrowth_WhenValidationFails_LogsPlainLanguageReason()
     {
         _factory.LoggerProvider.Clear();
         var client = _factory.CreateClient();
@@ -28,13 +28,14 @@ public class ControllerLoggingTests : IClassFixture<LoggingTestFactory>
             principal = -1m,
             annualRatePercent = 5m,
             compoundingCadence = "Annual",
-            durationYears = 5
+            durationYears = 5,
+            monthlyContribution = 100m
         };
 
-        _ = await client.PostAsJsonAsync("/api/v1/calculations", request);
+        _ = await client.PostAsJsonAsync("/api/v1/growth/contribution", request);
 
         var logEntry = _factory.LoggerProvider.Entries
-            .FirstOrDefault(entry => entry.Category.Contains("CalculationsController"));
+            .FirstOrDefault(entry => entry.Category.Contains("GrowthController"));
 
         Assert.NotNull(logEntry);
         Assert.Contains("validation", logEntry!.Message, StringComparison.OrdinalIgnoreCase);

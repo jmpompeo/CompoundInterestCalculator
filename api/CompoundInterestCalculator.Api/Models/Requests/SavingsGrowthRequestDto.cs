@@ -1,27 +1,33 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace CompoundInterestCalculator.Api.Models.Requests;
 
-public sealed class CalculationRequestDto
+public sealed class SavingsGrowthRequestDto
 {
     [Required]
-    [Range(typeof(decimal), "0", "10000000")]
+    [JsonPropertyName("principal")]
     public decimal Principal { get; init; }
 
     [Required]
     [Range(typeof(decimal), "0", "100")]
+    [JsonPropertyName("annualRatePercent")]
     public decimal AnnualRatePercent { get; init; }
 
     [Required]
     [RegularExpression("^(Annual|SemiAnnual|Quarterly|Monthly)$", ErrorMessage = "Compounding cadence is not supported.")]
-    public string CompoundingCadence { get; init; } = "Annual";
+    [JsonPropertyName("compoundingCadence")]
+    public string CompoundingCadence { get; init; } = "Monthly";
 
     [Required]
     [Range(0, 99)]
+    [JsonPropertyName("durationYears")]
     public int DurationYears { get; init; }
 
     [StringLength(64)]
+    [JsonPropertyName("clientReference")]
     public string? ClientReference { get; init; }
 
+    [JsonPropertyName("requestedAt")]
     public DateTimeOffset? RequestedAt { get; init; }
 }

@@ -1,6 +1,16 @@
 import { FormEvent, useMemo, useState } from 'react';
 
-type CalculationRequest = {
+type ContributionRequest = {
+  principal: number;
+  annualRatePercent: number;
+  compoundingCadence: string;
+  durationYears: number;
+  monthlyContribution: number;
+  clientReference?: string;
+  requestedAt?: string;
+};
+
+type SavingsRequest = {
   principal: number;
   annualRatePercent: number;
   compoundingCadence: string;
@@ -9,11 +19,14 @@ type CalculationRequest = {
   requestedAt?: string;
 };
 
+type CalculationRequest = ContributionRequest | SavingsRequest;
+
 type CalculationResponse = {
   startingPrincipal: number;
   annualRatePercent: number;
   compoundingCadence: string;
   durationYears: number;
+  monthlyContribution: number;
   endingBalance: number;
   currencyDisplay: string;
   calculationVersion: string;
@@ -34,6 +47,7 @@ type FormState = {
   principal: string;
   annualRatePercent: string;
   durationYears: string;
+  monthlyContribution: string;
   compoundingCadence: string;
   clientReference: string;
 };
@@ -45,11 +59,14 @@ const cadenceOptions = [
   { value: 'Monthly', label: 'Monthly', helper: 'Twelve times per year' }
 ];
 
+type CalculatorMode = 'contribution' | 'savings';
+
 const initialForm: FormState = {
   principal: '10000',
   annualRatePercent: '5.25',
   compoundingCadence: 'Annual',
   durationYears: '10',
+  monthlyContribution: '100',
   clientReference: ''
 };
 
@@ -58,8 +75,10 @@ export default function App() {
   const [result, setResult] = useState<CalculationResponse | null>(null);
   const [status, setStatus] = useState<'idle' | 'submitting'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<CalculatorMode>('contribution');
 
   const isSubmitting = status === 'submitting';
+  const isSavingsMode = mode === 'savings';
 
   const handleChange = (name: keyof FormState, value: string) => {
     setForm(prev => ({
@@ -73,7 +92,7 @@ export default function App() {
     setError(null);
     setStatus('submitting');
 
-    const payload: CalculationRequest = {
+    const basePayload = {
       principal: Number(form.principal),
       annualRatePercent: Number(form.annualRatePercent),
       durationYears: Number(form.durationYears),
@@ -82,8 +101,15 @@ export default function App() {
       requestedAt: new Date().toISOString()
     };
 
+    const payload: CalculationRequest =
+      mode === 'contribution'
+        ? { ...basePayload, monthlyContribution: Number(form.monthlyContribution) }
+        : basePayload;
+
+    const endpoint = mode === 'contribution' ? '/api/v1/growth/contribution' : '/api/v1/growth/savings';
+
     try {
-      const response = await fetch('/api/v1/calculations', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -117,11 +143,14 @@ export default function App() {
       return null;
     }
 
+    const monthlyContribution = result.monthlyContribution ?? 0;
+
     return [
       { label: 'Principal', value: result.startingPrincipal.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) },
       { label: 'Rate', value: `${result.annualRatePercent}%` },
       { label: 'Cadence', value: result.compoundingCadence },
-      { label: 'Duration', value: `${result.durationYears} years` }
+      { label: 'Duration', value: `${result.durationYears} years` },
+      { label: 'Monthly Contribution', value: monthlyContribution.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) }
     ];
   }, [result]);
 
@@ -147,10 +176,51 @@ export default function App() {
                   setForm({ ...initialForm });
                   setResult(null);
                   setError(null);
+                  setMode('contribution');
                 }}
               >
                 Reset
               </button>
+            </div>
+
+            <div>
+              <span className="text-sm font-medium text-slate-200">Calculator type</span>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {[
+                  {
+                    key: 'contribution' as const,
+                    title: 'Contribution growth',
+                    helper: 'Monthly deposits + compounding'
+                  },
+                  {
+                    key: 'savings' as const,
+                    title: 'Savings growth',
+                    helper: 'Fixed balance (HYSA/CD style)'
+                  }
+                ].map(option => {
+                  const active = mode === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                        active
+                          ? 'border-brand-400 bg-brand-500/10 text-brand-100'
+                          : 'border-slate-800/80 bg-slate-950/40 text-slate-300 hover:border-brand-700/40'
+                      }`}
+                      onClick={() => {
+                        setMode(option.key);
+                        if (option.key === 'savings') {
+                          setForm(prev => ({ ...prev, monthlyContribution: '0' }));
+                        }
+                      }}
+                    >
+                      <p className="text-sm font-semibold">{option.title}</p>
+                      <p className="text-xs text-slate-400">{option.helper}</p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <form className="space-y-5" onSubmit={handleSubmit}>
@@ -200,6 +270,22 @@ export default function App() {
                     required
                   />
                 </label>
+
+                {!isSavingsMode && (
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm font-medium text-slate-200">Monthly Contribution ($)</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      step={1}
+                      className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2 text-base text-white focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                      value={form.monthlyContribution}
+                      onChange={event => handleChange('monthlyContribution', event.target.value)}
+                      required
+                    />
+                  </label>
+                )}
 
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-medium text-slate-200">Client reference (optional)</span>

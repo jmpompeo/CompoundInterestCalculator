@@ -9,30 +9,77 @@ public sealed class CalculationService : ICalculationService
 {
     private const string DefaultCalculationVersion = "v1.0";
 
-    public CalculationResult CalculateCompoundInterest(InterestCalcReq request)
+    public CalculationResult CalculateContributionGrowth(InterestCalcReq request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        return RunCalculation(
+            request.StartingBalance,
+            request.InterestRate,
+            request.Years,
+            request.CompoundingCadence,
+            request.MonthlyContribution);
+    }
 
-        var principal = request.StartingBalance;
-        var cadenceName = request.CompoundingCadence;
+    public CalculationResult CalculateSavingsGrowth(SavingsCalcReq request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return RunCalculation(
+            request.StartingBalance,
+            request.InterestRate,
+            request.Years,
+            request.CompoundingCadence,
+            monthlyContribution: 0m);
+    }
+
+    private static CalculationResult RunCalculation(
+        decimal principal,
+        decimal annualRatePercent,
+        int years,
+        string cadenceName,
+        decimal monthlyContribution)
+    {
         var periodsPerYear = CompoundingCadenceOptions.GetPeriodsPerYear(cadenceName);
-        var annualRate = Conversions.ConvertPercentageToDecimal(request.InterestRate);
+        var annualRate = Conversions.ConvertPercentageToDecimal(annualRatePercent);
         var ratePerPeriod = decimal.Divide(annualRate, periodsPerYear);
-        var totalPeriods = request.Years * periodsPerYear;
+        var totalMonths = years * 12;
+        var monthsPerCompoundingPeriod = CalculateMonthsPerCompoundingPeriod(periodsPerYear);
 
         var balance = principal;
-        for (var period = 0; period < totalPeriods; period++)
+        for (var month = 1; month <= totalMonths; month++)
         {
-            balance += balance * ratePerPeriod;
+            balance += monthlyContribution;
+
+            if (month % monthsPerCompoundingPeriod == 0)
+            {
+                balance += balance * ratePerPeriod;
+            }
         }
 
         return CalculationResult.Create(
             startingPrincipal: principal,
-            annualRatePercent: request.InterestRate,
+            annualRatePercent: annualRatePercent,
             compoundingCadence: cadenceName,
-            durationYears: request.Years,
+            durationYears: years,
+            monthlyContribution: monthlyContribution,
             endingBalance: balance,
             currencyFormatter: Conversions.ConvertDecimalToCurrency,
             calculationVersion: DefaultCalculationVersion);
+    }
+
+    private static int CalculateMonthsPerCompoundingPeriod(int periodsPerYear)
+    {
+        if (periodsPerYear <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(periodsPerYear), "Periods per year must be positive.");
+        }
+
+        const int MonthsInYear = 12;
+        if (MonthsInYear % periodsPerYear != 0)
+        {
+            throw new InvalidOperationException(
+                $"Unsupported compounding cadence with {periodsPerYear} periods per year.");
+        }
+
+        return MonthsInYear / periodsPerYear;
     }
 }

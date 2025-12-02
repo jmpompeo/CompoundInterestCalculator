@@ -5,5 +5,6 @@ namespace CompoundCalc.Services.Contracts;
 
 public interface ICalculationService
 {
-    CalculationResult CalculateCompoundInterest(InterestCalcReq request);
+    CalculationResult CalculateContributionGrowth(InterestCalcReq request);
+    CalculationResult CalculateSavingsGrowth(SavingsCalcReq request);
 }

@@ -1,8 +1,10 @@
 using CompoundCalc.Services;
 using CompoundCalc.Services.Contracts;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using CompoundInterestCalculator.Api.Mappers;
 using CompoundInterestCalculator.Api.Middleware;
+using CompoundInterestCalculator.Api.Controllers;
 using CompoundInterestCalculator.Api.Telemetry;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
@@ -22,11 +24,13 @@ builder.Services
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     });
 
 builder.Services.AddFluentValidationAutoValidation(options =>
     options.DisableDataAnnotationsValidation = true);
-builder.Services.AddValidatorsFromAssemblyContaining<CalculationRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<ContributionGrowthRequestValidator>();
 
 builder.Services.AddApiVersioning(options =>
 {
@@ -75,7 +79,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 
         problemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
 
-        var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<CompoundInterestCalculator.Api.Controllers.CalculationsController>>();
+        var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<GrowthController>>();
         logger.LogValidationFailure(context.HttpContext.TraceIdentifier, problemDetails.Errors);
 
         return new BadRequestObjectResult(problemDetails);

@@ -7,8 +7,11 @@ rates, and time horizons without writing code.
 
 ## What It Does
 
-- `POST /api/v1/calculations` receives principal, annual rate, cadence, and duration, then returns the
-  ending balance along with currency formatting, calculation version, and correlation identifiers.
+- `POST /api/v1/growth/contribution` projects balances for accounts that receive recurring monthly
+  deposits (think 401(k) or brokerage auto-investing) and returns the ending balance, monthly
+  contribution echo, and correlation identifiers.
+- `POST /api/v1/growth/savings` models a fixed principal that compounds according to the cadence you
+  choose (e.g., HYSA or CD) so you can see how far a static balance grows with no extra deposits.
 - FluentValidation enforces business rules (principal, rates, cadence support, request metadata) and
   emits RFC 7807 responses that include the same trace ID seen in logs.
 - Structured telemetry logs every request with a propagated `x-correlation-id`, plus dedicated events

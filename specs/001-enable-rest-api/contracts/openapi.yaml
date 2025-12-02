@@ -15,27 +15,28 @@ servers:
           - staging
           - prod
 paths:
-  /api/v1/calculations:
+  /api/v1/growth/contribution:
     post:
-      operationId: postCalculation
-      summary: Calculate compound interest totals
+      operationId: postContributionGrowth
+      summary: Calculate growth with recurring monthly contributions
       tags:
-        - Calculations
+        - Growth
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CalculationRequest'
+              $ref: '#/components/schemas/ContributionGrowthRequest'
             examples:
-              basic:
-                summary: Annual compounding example
+              payrollInvesting:
+                summary: Annual compounding with monthly payroll deposits
                 value:
                   principal: 10000
                   annualRatePercent: 5.5
                   compoundingCadence: Annual
                   durationYears: 10
-                  clientReference: web-form-123
+                  monthlyContribution: 100
+                  clientReference: payroll-001
       responses:
         '200':
           description: Successful calculation
@@ -50,8 +51,9 @@ paths:
                     annualRatePercent: 5.5
                     compoundingCadence: Annual
                     durationYears: 10
-                    endingBalance: 17081.44
-                    currencyDisplay: "$17,081.44"
+                    monthlyContribution: 100
+                    endingBalance: 33381.64
+                    currencyDisplay: "$33,381.64"
                     calculationVersion: v1.0
                     traceId: 5f4c1ae40b4d4f6c949742e4115e9a21
                     responseId: 11111111-2222-3333-4444-555555555555
@@ -61,31 +63,52 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-              examples:
-                missingField:
-                  value:
-                    type: https://calc.example.com/errors/validation
-                    title: Invalid calculation request
-                    status: 400
-                    detail: "durationYears must be between 0 and 99."
-                    traceId: d1b5dd5719614b89a270dc67764c040d
-                    errors:
-                      durationYears:
-                        - durationYears must be between 0 and 99.
         '500':
           description: Unexpected error
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-              examples:
-                serverError:
-                  value:
-                    type: https://calc.example.com/errors/server
-                    title: Calculation failed
-                    status: 500
-                    detail: "Internal calculation error. Try again later."
-                    traceId: d4c1c1ca3a4a4bba934e58f07d5f8ef7
+      security: []
+  /api/v1/growth/savings:
+    post:
+      operationId: postSavingsGrowth
+      summary: Calculate compound growth for a fixed balance (HYSA/CD)
+      tags:
+        - Growth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavingsGrowthRequest'
+            examples:
+              hysa:
+                summary: Monthly compounding with no additional deposits
+                value:
+                  principal: 15000
+                  annualRatePercent: 4.2
+                  compoundingCadence: Monthly
+                  durationYears: 3
+      responses:
+        '200':
+          description: Successful calculation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationResult'
+        '400':
+          description: Validation error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Unexpected error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
       security: []
   /health/ready:
     get:
@@ -152,7 +175,48 @@ paths:
       security: []
 components:
   schemas:
-    CalculationRequest:
+    ContributionGrowthRequest:
+      type: object
+      required:
+        - principal
+        - annualRatePercent
+        - compoundingCadence
+        - durationYears
+        - monthlyContribution
+      properties:
+        principal:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 10000000
+        annualRatePercent:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+        compoundingCadence:
+          type: string
+          enum:
+            - Annual
+            - SemiAnnual
+            - Quarterly
+            - Monthly
+        durationYears:
+          type: integer
+          minimum: 0
+          maximum: 99
+        monthlyContribution:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 1000000000
+        clientReference:
+          type: string
+          maxLength: 64
+        requestedAt:
+          type: string
+          format: date-time
+    SavingsGrowthRequest:
       type: object
       required:
         - principal
@@ -194,6 +258,7 @@ components:
         - annualRatePercent
         - compoundingCadence
         - durationYears
+        - monthlyContribution
         - endingBalance
         - currencyDisplay
         - calculationVersion
@@ -210,6 +275,9 @@ components:
           type: string
         durationYears:
           type: integer
+        monthlyContribution:
+          type: number
+          format: decimal
         endingBalance:
           type: number
           format: decimal

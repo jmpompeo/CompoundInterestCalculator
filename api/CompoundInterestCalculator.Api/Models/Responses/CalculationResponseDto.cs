@@ -16,6 +16,9 @@ public sealed class CalculationResponseDto
     [JsonPropertyName("durationYears")]
     public int DurationYears { get; init; }
 
+    [JsonPropertyName("monthlyContribution")]
+    public decimal MonthlyContribution { get; init; }
+
     [JsonPropertyName("endingBalance")]
     public decimal EndingBalance { get; init; }
 

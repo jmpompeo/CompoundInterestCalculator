@@ -4,12 +4,12 @@ using FluentValidation;
 
 namespace CompoundInterestCalculator.Api.Validation;
 
-public sealed class CalculationRequestValidator : AbstractValidator<CalculationRequestDto>
+public sealed class SavingsGrowthRequestValidator : AbstractValidator<SavingsGrowthRequestDto>
 {
-    public CalculationRequestValidator()
+    public SavingsGrowthRequestValidator()
     {
         RuleFor(x => x.Principal)
-            .InclusiveBetween(0m, 10_000_000m);
+            .InclusiveBetween(0m, 1_000_000_000m);
 
         RuleFor(x => x.AnnualRatePercent)
             .InclusiveBetween(0m, 100m);

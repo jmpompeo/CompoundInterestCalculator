@@ -5,6 +5,7 @@ public sealed record CalculationResult(
     decimal AnnualRatePercent,
     string CompoundingCadence,
     int DurationYears,
+    decimal MonthlyContribution,
     decimal EndingBalance,
     string CurrencyDisplay,
     string CalculationVersion)
@@ -14,6 +15,7 @@ public sealed record CalculationResult(
         decimal annualRatePercent,
         string compoundingCadence,
         int durationYears,
+        decimal monthlyContribution,
         decimal endingBalance,
         Func<decimal, string> currencyFormatter,
         string calculationVersion)
@@ -24,6 +26,7 @@ public sealed record CalculationResult(
             AnnualRatePercent: annualRatePercent,
             CompoundingCadence: compoundingCadence,
             DurationYears: durationYears,
+            MonthlyContribution: monthlyContribution,
             EndingBalance: roundedEndingBalance,
             CurrencyDisplay: currencyFormatter(roundedEndingBalance),
             CalculationVersion: calculationVersion);
