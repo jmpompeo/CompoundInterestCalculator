@@ -21,7 +21,7 @@ public sealed class CalculationMapper
             request.AnnualRatePercent,
             request.DurationYears,
             request.CompoundingCadence);
-    
+
     public DebtPayoffRequest ToDebtPayoffDomain(DebtPayoffRequestDto request)
         => new(
             request.TotalDebt,

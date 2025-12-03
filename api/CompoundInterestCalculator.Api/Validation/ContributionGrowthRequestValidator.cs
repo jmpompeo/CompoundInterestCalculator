@@ -24,7 +24,7 @@ public sealed class ContributionGrowthRequestValidator : AbstractValidator<Contr
 
         RuleFor(x => x.ClientReference)
             .MaximumLength(64);
-        
+
         RuleFor(x => x.MonthlyContribution)
             .InclusiveBetween(0m, 1_000_000_000m);
     }
