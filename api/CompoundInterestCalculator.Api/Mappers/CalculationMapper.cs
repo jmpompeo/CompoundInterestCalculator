@@ -21,6 +21,12 @@ public sealed class CalculationMapper
             request.AnnualRatePercent,
             request.DurationYears,
             request.CompoundingCadence);
+    
+    public DebtPayoffRequest ToDebtPayoffDomain(DebtPayoffRequestDto request)
+        => new(
+            request.TotalDebt,
+            request.MonthlyPayment,
+            request.MonthlyRatePercent);
 
     public CalculationResponseDto ToResponse(
         ContributionGrowthRequestDto request,
@@ -37,6 +43,32 @@ public sealed class CalculationMapper
         Guid responseId,
         DateTimeOffset calculatedAt)
         => CreateResponse(result, traceId, responseId, calculatedAt, request.ClientReference, request.RequestedAt);
+
+    public DebtPayoffResponseDto ToResponse(
+        DebtPayoffRequestDto request,
+        DebtPayoffResult result,
+        string traceId,
+        Guid responseId,
+        DateTimeOffset calculatedAt)
+        => new()
+        {
+            StartingDebt = result.StartingDebt,
+            MonthlyPayment = result.MonthlyPayment,
+            MonthlyRatePercent = result.MonthlyRatePercent,
+            MinimumPaymentRequired = result.MinimumPaymentRequired,
+            MinimumPaymentDisplay = result.MinimumPaymentDisplay,
+            MonthsToPayoff = result.MonthsToPayoff,
+            TotalPaid = result.TotalPaid,
+            TotalInterestPaid = result.TotalInterestPaid,
+            TotalPaidDisplay = result.TotalPaidDisplay,
+            TotalInterestDisplay = result.TotalInterestDisplay,
+            CalculationVersion = result.CalculationVersion,
+            TraceId = traceId,
+            ResponseId = responseId,
+            ClientReference = request.ClientReference,
+            RequestedAt = request.RequestedAt,
+            CalculatedAt = calculatedAt
+        };
 
     private static CalculationResponseDto CreateResponse(
         CalculationResult result,

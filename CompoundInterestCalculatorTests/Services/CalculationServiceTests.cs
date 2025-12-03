@@ -85,6 +85,45 @@ public class CalculationServiceTests
         Assert.Equal(0m, result.MonthlyContribution);
     }
 
+    [Fact]
+    public void CalculateDebtPayoff_WithZeroInterest_CompletesInWholeMonths()
+    {
+        var request = new DebtPayoffRequest(1000m, 250m, 0m);
+
+        var result = _service.CalculateDebtPayoff(request);
+
+        Assert.Equal(4, result.MonthsToPayoff);
+        Assert.Equal(1000m, result.TotalPaid);
+        Assert.Equal(0m, result.TotalInterestPaid);
+        Assert.Equal("$1,000.00", result.TotalPaidDisplay);
+        Assert.Equal(0.01m, result.MinimumPaymentRequired);
+        Assert.Equal("$0.01", result.MinimumPaymentDisplay);
+    }
+
+    [Fact]
+    public void CalculateDebtPayoff_WithInterest_ComputesAccruedInterest()
+    {
+        var request = new DebtPayoffRequest(1000m, 600m, 1m);
+
+        var result = _service.CalculateDebtPayoff(request);
+
+        Assert.Equal(2, result.MonthsToPayoff);
+        Assert.Equal(1014.10m, result.TotalPaid);
+        Assert.Equal(14.10m, result.TotalInterestPaid);
+        Assert.Equal("$1,014.10", result.TotalPaidDisplay);
+        Assert.Equal("$14.10", result.TotalInterestDisplay);
+        Assert.Equal(10.01m, result.MinimumPaymentRequired);
+        Assert.Equal("$10.01", result.MinimumPaymentDisplay);
+    }
+
+    [Fact]
+    public void CalculateDebtPayoff_WhenPaymentCannotCoverInterest_Throws()
+    {
+        var request = new DebtPayoffRequest(1000m, 5m, 1m);
+
+        Assert.Throws<InvalidOperationException>(() => _service.CalculateDebtPayoff(request));
+    }
+
     private static decimal ComputeExpectedBalance(
         decimal principal,
         decimal annualRatePercent,

@@ -31,6 +31,66 @@ public sealed class CalculationService : ICalculationService
             monthlyContribution: 0m);
     }
 
+    public DebtPayoffResult CalculateDebtPayoff(DebtPayoffRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var monthlyRate = Conversions.ConvertPercentageToDecimal(request.MonthlyRatePercent);
+        var remainingBalance = request.TotalDebt;
+        var months = 0;
+        var totalPaid = 0m;
+        var totalInterest = 0m;
+        var minimumPaymentRequired = DebtPayoffMath.CalculateMinimumPaymentRequired(request.TotalDebt, request.MonthlyRatePercent);
+
+        if (monthlyRate > 0m && request.MonthlyPayment < minimumPaymentRequired)
+        {
+            throw new InvalidOperationException("Monthly payment must exceed accrued interest to reduce the balance.");
+        }
+
+        const int MaxMonths = 3600;
+
+        while (remainingBalance > 0m)
+        {
+            var interest = monthlyRate > 0m
+                ? decimal.Round(remainingBalance * monthlyRate, 10, MidpointRounding.ToEven)
+                : 0m;
+
+            var principalPayment = request.MonthlyPayment - interest;
+            if (principalPayment <= 0m)
+            {
+                throw new InvalidOperationException("Monthly payment does not cover accrued interest.");
+            }
+
+            var appliedPrincipal = Math.Min(principalPayment, remainingBalance);
+            var appliedPayment = interest + appliedPrincipal;
+
+            remainingBalance -= appliedPrincipal;
+            remainingBalance = remainingBalance <= 0m
+                ? 0m
+                : decimal.Round(remainingBalance, 10, MidpointRounding.ToEven);
+
+            totalInterest += interest;
+            totalPaid += appliedPayment;
+            months++;
+
+            if (months > MaxMonths)
+            {
+                throw new InvalidOperationException("Debt payoff calculation exceeded the supported duration.");
+            }
+        }
+
+        return DebtPayoffResult.Create(
+            startingDebt: request.TotalDebt,
+            monthlyPayment: request.MonthlyPayment,
+            monthlyRatePercent: request.MonthlyRatePercent,
+            minimumPaymentRequired: minimumPaymentRequired,
+            monthsToPayoff: months,
+            totalPaid: totalPaid,
+            totalInterestPaid: totalInterest,
+            currencyFormatter: Conversions.ConvertDecimalToCurrency,
+            calculationVersion: DefaultCalculationVersion);
+    }
+
     private static CalculationResult RunCalculation(
         decimal principal,
         decimal annualRatePercent,

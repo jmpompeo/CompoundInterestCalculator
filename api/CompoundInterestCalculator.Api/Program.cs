@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using CompoundInterestCalculator.Api.Mappers;
 using CompoundInterestCalculator.Api.Middleware;
-using CompoundInterestCalculator.Api.Controllers;
 using CompoundInterestCalculator.Api.Telemetry;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
@@ -17,6 +16,8 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Reflection;
 using System.IO;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
@@ -79,7 +80,11 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 
         problemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
 
-        var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<GrowthController>>();
+        var loggerFactory = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>();
+        var actionDescriptor = context.ActionDescriptor as ControllerActionDescriptor;
+        var logger = actionDescriptor is not null
+            ? loggerFactory.CreateLogger(actionDescriptor.ControllerTypeInfo.AsType())
+            : loggerFactory.CreateLogger("Validation");
         logger.LogValidationFailure(context.HttpContext.TraceIdentifier, problemDetails.Errors);
 
         return new BadRequestObjectResult(problemDetails);
