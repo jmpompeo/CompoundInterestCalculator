@@ -33,7 +33,7 @@ public static class CompoundingCadenceOptions
             return schedule;
         }
 
-        throw new ArgumentException($"Unsupported compounding cadence '{cadence}'.", nameof(cadence));
+        throw new ArgumentException($"This compounding cadence is not supported'{cadence}'.", nameof(cadence));
     }
 
     private static bool TryResolveSchedule(string? cadence, out (string Name, int PeriodsPerYear) schedule)
