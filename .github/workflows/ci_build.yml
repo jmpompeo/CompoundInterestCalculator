@@ -67,7 +67,7 @@ jobs:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
           if [ -z "$RENDER_DEPLOY_HOOK" ]; then
-            echo "RENDER_DEPLOY_HOOK secret is not set. Configure it in the repo settings." >&2
-            exit 1
+            echo "RENDER_DEPLOY_HOOK secret is not set. Skipping deploy hook (auto-deploy from GitHub is enabled)."
+            exit 0
           fi
           curl -fsSL -X POST "$RENDER_DEPLOY_HOOK"
