@@ -19,7 +19,7 @@ public sealed class MortgageEstimateResponseDto
     [JsonPropertyName("termYears")]
     public int TermYears { get; init; }
 
-    [JsonPropertyName("monthlyPayment")]
+    [JsonPropertyName("monthlyPrincipalAndInterest")]
     public decimal MonthlyPrincipalAndInterest { get; init; }
 
     [JsonPropertyName("monthlyPropertyTax")]
