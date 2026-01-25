@@ -91,6 +91,41 @@ public sealed class CalculationService : ICalculationService
             calculationVersion: DefaultCalculationVersion);
     }
 
+    public MortgageResult CalculateMortgageEstimate(MortgageRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var loanAmount = request.HomePrice - request.DownPayment;
+        var termMonths = request.TermYears * 12;
+        var monthlyRate = decimal.Divide(Conversions.ConvertPercentageToDecimal(request.AnnualRatePercent), 12m);
+
+        var monthlyPrincipalAndInterest = CalculateMonthlyMortgagePayment(loanAmount, monthlyRate, termMonths);
+        var monthlyPropertyTax = request.AnnualPropertyTax.HasValue
+            ? decimal.Divide(request.AnnualPropertyTax.Value, 12m)
+            : 0m;
+        var monthlyPmi = request.AnnualPmi.HasValue
+            ? decimal.Divide(request.AnnualPmi.Value, 12m)
+            : 0m;
+        var monthlyTotal = monthlyPrincipalAndInterest + monthlyPropertyTax + monthlyPmi;
+        var totalPaid = monthlyPrincipalAndInterest * termMonths;
+        var totalInterest = totalPaid - loanAmount;
+
+        return MortgageResult.Create(
+            homePrice: request.HomePrice,
+            downPayment: request.DownPayment,
+            loanAmount: loanAmount,
+            annualRatePercent: request.AnnualRatePercent,
+            termYears: request.TermYears,
+            monthlyPrincipalAndInterest: monthlyPrincipalAndInterest,
+            monthlyPropertyTax: monthlyPropertyTax,
+            monthlyPmi: monthlyPmi,
+            monthlyTotalPayment: monthlyTotal,
+            totalPaid: totalPaid,
+            totalInterest: totalInterest,
+            currencyFormatter: Conversions.ConvertDecimalToCurrency,
+            calculationVersion: DefaultCalculationVersion);
+    }
+
     private static CalculationResult RunCalculation(
         decimal principal,
         decimal annualRatePercent,
@@ -141,5 +176,29 @@ public sealed class CalculationService : ICalculationService
         }
 
         return MonthsInYear / periodsPerYear;
+    }
+
+    private static decimal CalculateMonthlyMortgagePayment(decimal principal, decimal monthlyRate, int termMonths)
+    {
+        if (principal <= 0m || termMonths <= 0)
+        {
+            return 0m;
+        }
+
+        if (monthlyRate <= 0m)
+        {
+            return decimal.Divide(principal, termMonths);
+        }
+
+        var ratePlusOne = (double)(1m + monthlyRate);
+        var discountFactor = Math.Pow(ratePlusOne, termMonths);
+        var denominator = 1m - decimal.Divide(1m, (decimal)discountFactor);
+
+        if (denominator <= 0m)
+        {
+            throw new InvalidOperationException("Unable to compute mortgage payment with the supplied inputs.");
+        }
+
+        return decimal.Divide(principal * monthlyRate, denominator);
     }
 }
