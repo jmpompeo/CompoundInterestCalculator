@@ -27,6 +27,20 @@ type DebtPayoffRequest = {
   requestedAt?: string;
 };
 
+type MortgageRequest = {
+  homePrice: number;
+  downPaymentValue: number;
+  downPaymentType: 'Amount' | 'Percent';
+  annualRatePercent: number;
+  termYears: number;
+  propertyTaxType?: 'Amount' | 'Percent';
+  propertyTaxValue?: number;
+  pmiType?: 'Amount' | 'Percent';
+  pmiValue?: number;
+  clientReference?: string;
+  requestedAt?: string;
+};
+
 type CalculationRequest = ContributionRequest | SavingsRequest;
 
 type CalculationResponse = {
@@ -37,6 +51,33 @@ type CalculationResponse = {
   monthlyContribution: number;
   endingBalance: number;
   currencyDisplay: string;
+  calculationVersion: string;
+  traceId: string;
+  responseId: string;
+  clientReference?: string;
+  requestedAt?: string;
+  calculatedAt: string;
+};
+
+type MortgageResponse = {
+  homePrice: number;
+  downPayment: number;
+  loanAmount: number;
+  annualRatePercent: number;
+  termYears: number;
+  monthlyPrincipalAndInterest: number;
+  monthlyPropertyTax: number;
+  monthlyPmi: number;
+  monthlyTotalPayment: number;
+  totalPaid: number;
+  totalInterest: number;
+  loanAmountDisplay: string;
+  monthlyPrincipalAndInterestDisplay: string;
+  monthlyPropertyTaxDisplay: string;
+  monthlyPmiDisplay: string;
+  monthlyTotalPaymentDisplay: string;
+  totalPaidDisplay: string;
+  totalInterestDisplay: string;
   calculationVersion: string;
   traceId: string;
   responseId: string;
@@ -86,9 +127,25 @@ type DebtFormState = {
   clientReference: string;
 };
 
+type MortgageFormState = {
+  homePrice: string;
+  downPaymentValue: string;
+  downPaymentType: 'Amount' | 'Percent';
+  annualRatePercent: string;
+  termYears: string;
+  includePropertyTax: boolean;
+  propertyTaxType: 'Amount' | 'Percent';
+  propertyTaxValue: string;
+  includePmi: boolean;
+  pmiType: 'Amount' | 'Percent';
+  pmiValue: string;
+  clientReference: string;
+};
+
 type ResultState =
   | { kind: 'growth'; data: CalculationResponse }
-  | { kind: 'debt'; data: DebtPayoffResponse };
+  | { kind: 'debt'; data: DebtPayoffResponse }
+  | { kind: 'mortgage'; data: MortgageResponse };
 
 const cadenceOptions = [
   { value: 'Annual', label: 'Annual', helper: 'Once per year' },
@@ -97,7 +154,7 @@ const cadenceOptions = [
   { value: 'Monthly', label: 'Monthly', helper: 'Twelve times per year' }
 ];
 
-type CalculatorMode = 'contribution' | 'savings' | 'debt';
+type CalculatorMode = 'contribution' | 'savings' | 'debt' | 'mortgage';
 
 const initialGrowthForm: GrowthFormState = {
   principal: '10000',
@@ -115,6 +172,21 @@ const initialDebtForm: DebtFormState = {
   clientReference: ''
 };
 
+const initialMortgageForm: MortgageFormState = {
+  homePrice: '450000',
+  downPaymentValue: '90000',
+  downPaymentType: 'Amount',
+  annualRatePercent: '6.25',
+  termYears: '30',
+  includePropertyTax: false,
+  propertyTaxType: 'Amount',
+  propertyTaxValue: '',
+  includePmi: false,
+  pmiType: 'Amount',
+  pmiValue: '',
+  clientReference: ''
+};
+
 const preventInvalidNumericInput = (event: KeyboardEvent<HTMLInputElement>) => {
   if (['e', 'E', '+', '-'].includes(event.key)) {
     event.preventDefault();
@@ -128,6 +200,57 @@ const parseNumber = (value: string): number | null => {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const roundToTwo = (value: number): number => Math.round(value * 100) / 100;
+
+const convertDownPaymentValue = (
+  homePrice: number | null,
+  downPaymentValue: number | null,
+  nextType: 'Amount' | 'Percent'
+): string => {
+  if (homePrice === null || homePrice <= 0 || downPaymentValue === null) {
+    return '';
+  }
+
+  if (nextType === 'Percent') {
+    return roundToTwo((downPaymentValue / homePrice) * 100).toString();
+  }
+
+  return roundToTwo((homePrice * downPaymentValue) / 100).toString();
+};
+
+const convertAnnualValue = (
+  baseAmount: number | null,
+  value: number | null,
+  nextType: 'Amount' | 'Percent'
+): string => {
+  if (baseAmount === null || baseAmount <= 0 || value === null) {
+    return '';
+  }
+
+  if (nextType === 'Percent') {
+    return roundToTwo((value / baseAmount) * 100).toString();
+  }
+
+  return roundToTwo((baseAmount * value) / 100).toString();
+};
+
+const calculateLoanAmount = (
+  homePriceValue: number | null,
+  downPaymentValue: number | null,
+  downPaymentType: 'Amount' | 'Percent'
+): number | null => {
+  if (homePriceValue === null || downPaymentValue === null) {
+    return null;
+  }
+
+  const downPaymentAmount =
+    downPaymentType === 'Percent'
+      ? roundToTwo((homePriceValue * downPaymentValue) / 100)
+      : downPaymentValue;
+
+  return roundToTwo(homePriceValue - downPaymentAmount);
 };
 
 const computeMinimumPaymentRequirement = (totalDebt: number, monthlyRatePercent: number): number | null => {
@@ -148,6 +271,7 @@ const computeMinimumPaymentRequirement = (totalDebt: number, monthlyRatePercent:
 export default function App() {
   const [growthForm, setGrowthForm] = useState(initialGrowthForm);
   const [debtForm, setDebtForm] = useState(initialDebtForm);
+  const [mortgageForm, setMortgageForm] = useState(initialMortgageForm);
   const [result, setResult] = useState<ResultState | null>(null);
   const [status, setStatus] = useState<'idle' | 'submitting'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -156,8 +280,13 @@ export default function App() {
   const isSubmitting = status === 'submitting';
   const isSavingsMode = mode === 'savings';
   const isDebtMode = mode === 'debt';
-  const activeClientReference = isDebtMode ? debtForm.clientReference : growthForm.clientReference;
-  const submitLabel = isDebtMode ? 'Calculate payoff' : 'Calculate growth';
+  const isMortgageMode = mode === 'mortgage';
+  const activeClientReference = isDebtMode
+    ? debtForm.clientReference
+    : isMortgageMode
+      ? mortgageForm.clientReference
+      : growthForm.clientReference;
+  const submitLabel = isDebtMode ? 'Calculate payoff' : isMortgageMode ? 'Estimate payment' : 'Calculate growth';
   const minimumPaymentHint = useMemo(() => {
     if (!isDebtMode) {
       return null;
@@ -177,6 +306,71 @@ export default function App() {
     return requirement.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
   }, [isDebtMode, debtForm.totalDebt, debtForm.monthlyRatePercent]);
 
+  const downPaymentAmountHint = useMemo(() => {
+    if (!isMortgageMode || mortgageForm.downPaymentType !== 'Percent') {
+      return null;
+    }
+
+    const homePriceValue = parseNumber(mortgageForm.homePrice);
+    const percentValue = parseNumber(mortgageForm.downPaymentValue);
+    if (homePriceValue === null || percentValue === null) {
+      return null;
+    }
+
+    const amount = roundToTwo((homePriceValue * percentValue) / 100);
+    return amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+  }, [isMortgageMode, mortgageForm.downPaymentType, mortgageForm.homePrice, mortgageForm.downPaymentValue]);
+
+  const propertyTaxAmountHint = useMemo(() => {
+    if (!isMortgageMode || !mortgageForm.includePropertyTax || mortgageForm.propertyTaxType !== 'Percent') {
+      return null;
+    }
+
+    const homePriceValue = parseNumber(mortgageForm.homePrice);
+    const percentValue = parseNumber(mortgageForm.propertyTaxValue);
+    if (homePriceValue === null || percentValue === null) {
+      return null;
+    }
+
+    const amount = roundToTwo((homePriceValue * percentValue) / 100);
+    return amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+  }, [
+    isMortgageMode,
+    mortgageForm.includePropertyTax,
+    mortgageForm.propertyTaxType,
+    mortgageForm.homePrice,
+    mortgageForm.propertyTaxValue
+  ]);
+
+  const pmiAmountHint = useMemo(() => {
+    if (!isMortgageMode || !mortgageForm.includePmi || mortgageForm.pmiType !== 'Percent') {
+      return null;
+    }
+
+    const homePriceValue = parseNumber(mortgageForm.homePrice);
+    const downPaymentValue = parseNumber(mortgageForm.downPaymentValue);
+    const loanAmount = calculateLoanAmount(homePriceValue, downPaymentValue, mortgageForm.downPaymentType);
+    if (loanAmount === null || loanAmount <= 0) {
+      return null;
+    }
+
+    const percentValue = parseNumber(mortgageForm.pmiValue);
+    if (percentValue === null) {
+      return null;
+    }
+
+    const amount = roundToTwo((loanAmount * percentValue) / 100);
+    return amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+  }, [
+    isMortgageMode,
+    mortgageForm.includePmi,
+    mortgageForm.pmiType,
+    mortgageForm.homePrice,
+    mortgageForm.downPaymentType,
+    mortgageForm.downPaymentValue,
+    mortgageForm.pmiValue
+  ]);
+
   const handleGrowthChange = (name: keyof GrowthFormState, value: string) => {
     setGrowthForm(prev => ({
       ...prev,
@@ -191,6 +385,13 @@ export default function App() {
     }));
   };
 
+  const handleMortgageChange = (name: keyof MortgageFormState, value: string) => {
+    setMortgageForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -200,7 +401,7 @@ export default function App() {
     const timestamp = new Date().toISOString();
 
     let endpoint: string;
-    let payload: CalculationRequest | DebtPayoffRequest;
+    let payload: CalculationRequest | DebtPayoffRequest | MortgageRequest;
 
     if (currentMode === 'debt') {
       payload = {
@@ -211,6 +412,26 @@ export default function App() {
         requestedAt: timestamp
       };
       endpoint = '/api/v1/debt/payoff';
+    } else if (currentMode === 'mortgage') {
+      const propertyTaxValue = mortgageForm.includePropertyTax ? parseNumber(mortgageForm.propertyTaxValue) : null;
+      const propertyTaxType = mortgageForm.includePropertyTax ? mortgageForm.propertyTaxType : null;
+      const pmiValue = mortgageForm.includePmi ? parseNumber(mortgageForm.pmiValue) : null;
+      const pmiType = mortgageForm.includePmi ? mortgageForm.pmiType : null;
+
+      payload = {
+        homePrice: Number(mortgageForm.homePrice),
+        downPaymentValue: Number(mortgageForm.downPaymentValue),
+        downPaymentType: mortgageForm.downPaymentType,
+        annualRatePercent: Number(mortgageForm.annualRatePercent),
+        termYears: Number(mortgageForm.termYears),
+        propertyTaxType: propertyTaxType ?? undefined,
+        propertyTaxValue: propertyTaxValue ?? undefined,
+        pmiType: pmiType ?? undefined,
+        pmiValue: pmiValue ?? undefined,
+        clientReference: mortgageForm.clientReference?.trim() || undefined,
+        requestedAt: timestamp
+      };
+      endpoint = '/api/v1/mortgage/estimate';
     } else {
       const basePayload = {
         principal: Number(growthForm.principal),
@@ -251,6 +472,8 @@ export default function App() {
       const body = await response.json();
       if (currentMode === 'debt') {
         setResult({ kind: 'debt', data: body as DebtPayoffResponse });
+      } else if (currentMode === 'mortgage') {
+        setResult({ kind: 'mortgage', data: body as MortgageResponse });
       } else {
         setResult({ kind: 'growth', data: body as CalculationResponse });
       }
@@ -278,6 +501,21 @@ export default function App() {
         { label: 'Cadence', value: data.compoundingCadence },
         { label: 'Duration', value: `${data.durationYears} years` },
         { label: 'Monthly Contribution', value: monthlyContribution.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) }
+      ];
+    }
+
+    if (result.kind === 'mortgage') {
+      const mortgage = result.data;
+      return [
+        { label: 'Home price', value: mortgage.homePrice.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) },
+        { label: 'Down payment', value: mortgage.downPayment.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) },
+        { label: 'Loan amount', value: mortgage.loanAmountDisplay },
+        { label: 'Rate', value: `${mortgage.annualRatePercent}%` },
+        { label: 'Term', value: `${mortgage.termYears} years` },
+        { label: 'Monthly P&I', value: mortgage.monthlyPrincipalAndInterestDisplay },
+        { label: 'Monthly taxes', value: mortgage.monthlyPropertyTaxDisplay },
+        { label: 'Monthly PMI', value: mortgage.monthlyPmiDisplay },
+        { label: 'Total interest', value: mortgage.totalInterestDisplay }
       ];
     }
 
@@ -313,6 +551,7 @@ export default function App() {
                 onClick={() => {
                   setGrowthForm({ ...initialGrowthForm });
                   setDebtForm({ ...initialDebtForm });
+                  setMortgageForm({ ...initialMortgageForm });
                   setResult(null);
                   setError(null);
                   setMode('contribution');
@@ -340,6 +579,11 @@ export default function App() {
                     key: 'debt' as const,
                     title: 'Debt payoff',
                     helper: 'Months until balance reaches zero'
+                  },
+                  {
+                    key: 'mortgage' as const,
+                    title: 'Mortgage estimate',
+                    helper: 'Monthly payment + total interest'
                   }
                 ].map(option => {
                   const active = mode === option.key;
@@ -423,6 +667,286 @@ export default function App() {
                     />
                   </label>
                 </div>
+              ) : isMortgageMode ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm font-medium text-slate-200">Home price ($)</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step={1}
+                      onKeyDown={preventInvalidNumericInput}
+                      className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2 text-base text-white focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                      value={mortgageForm.homePrice}
+                      onChange={event => handleMortgageChange('homePrice', event.target.value)}
+                      required
+                    />
+                  </label>
+
+                  <div className="flex flex-col gap-3">
+                    <span className="text-sm font-medium text-slate-200">Down payment type</span>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {(['Amount', 'Percent'] as const).map(option => {
+                        const active = mortgageForm.downPaymentType === option;
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            className={`rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                              active
+                                ? 'border-brand-400 bg-brand-500/10 text-brand-100'
+                                : 'border-slate-800/80 bg-slate-950/40 text-slate-300 hover:border-brand-700/40'
+                            }`}
+                            onClick={() => {
+                              if (option === mortgageForm.downPaymentType) {
+                                return;
+                              }
+
+                              const homePriceValue = parseNumber(mortgageForm.homePrice);
+                              const downPaymentValue = parseNumber(mortgageForm.downPaymentValue);
+                              const nextValue = convertDownPaymentValue(homePriceValue, downPaymentValue, option);
+                              setMortgageForm(prev => ({
+                                ...prev,
+                                downPaymentType: option,
+                                downPaymentValue: nextValue === '' ? prev.downPaymentValue : nextValue
+                              }));
+                            }}
+                          >
+                            <p className="text-sm font-semibold">{option === 'Amount' ? 'Amount ($)' : 'Percent (%)'}</p>
+                            <p className="text-xs text-slate-400">
+                              {option === 'Amount' ? 'Fixed dollar amount' : 'Percent of the list price'}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm font-medium text-slate-200">Annual rate (%)</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      onKeyDown={preventInvalidNumericInput}
+                      className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2 text-base text-white focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                      value={mortgageForm.annualRatePercent}
+                      onChange={event => handleMortgageChange('annualRatePercent', event.target.value)}
+                      required
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm font-medium text-slate-200">Term (years)</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={40}
+                      step={1}
+                      onKeyDown={preventInvalidNumericInput}
+                      className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2 text-base text-white focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                      value={mortgageForm.termYears}
+                      onChange={event => handleMortgageChange('termYears', event.target.value)}
+                      required
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-2 sm:col-span-2">
+                    <span className="text-sm font-medium text-slate-200">
+                      Down payment {mortgageForm.downPaymentType === 'Percent' ? '(%)' : '($)'}
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step={mortgageForm.downPaymentType === 'Percent' ? 0.01 : 1}
+                      onKeyDown={preventInvalidNumericInput}
+                      className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2 text-base text-white focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                      value={mortgageForm.downPaymentValue}
+                      onChange={event => handleMortgageChange('downPaymentValue', event.target.value)}
+                      required
+                    />
+                    {downPaymentAmountHint && (
+                      <span className="text-xs text-slate-400">
+                        Estimated amount: <span className="font-semibold text-slate-200">{downPaymentAmountHint}</span>
+                      </span>
+                    )}
+                  </label>
+
+                  <div className="sm:col-span-2 rounded-2xl border border-slate-800/70 bg-slate-950/40 p-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-semibold text-slate-200">Add-ons (optional)</span>
+                      <span className="text-xs text-slate-400">Include property taxes or PMI to estimate a total payment.</span>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {[
+                        { key: 'includePropertyTax' as const, title: 'Property taxes' },
+                        { key: 'includePmi' as const, title: 'PMI / mortgage insurance' }
+                      ].map(option => {
+                        const active = mortgageForm[option.key];
+                        return (
+                          <button
+                            key={option.key}
+                            type="button"
+                            className={`rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                              active
+                                ? 'border-brand-400 bg-brand-500/10 text-brand-100'
+                                : 'border-slate-800/80 bg-slate-950/40 text-slate-300 hover:border-brand-700/40'
+                            }`}
+                            onClick={() =>
+                              setMortgageForm(prev => ({
+                                ...prev,
+                                [option.key]: !prev[option.key]
+                              }))
+                            }
+                          >
+                            <p className="text-sm font-semibold">{option.title}</p>
+                            <p className="text-xs text-slate-400">{active ? 'Included in total' : 'Excluded for now'}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {mortgageForm.includePropertyTax && (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="flex flex-col gap-2">
+                          <span className="text-sm font-medium text-slate-200">Property tax type</span>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {(['Amount', 'Percent'] as const).map(option => {
+                              const active = mortgageForm.propertyTaxType === option;
+                              return (
+                                <button
+                                  key={option}
+                                  type="button"
+                                  className={`rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                                    active
+                                      ? 'border-brand-400 bg-brand-500/10 text-brand-100'
+                                      : 'border-slate-800/80 bg-slate-950/40 text-slate-300 hover:border-brand-700/40'
+                                  }`}
+                                  onClick={() => {
+                                    if (option === mortgageForm.propertyTaxType) {
+                                      return;
+                                    }
+
+                                    const homePriceValue = parseNumber(mortgageForm.homePrice);
+                                    const taxValue = parseNumber(mortgageForm.propertyTaxValue);
+                                    const nextValue = convertAnnualValue(homePriceValue, taxValue, option);
+                                    setMortgageForm(prev => ({
+                                      ...prev,
+                                      propertyTaxType: option,
+                                      propertyTaxValue: nextValue === '' ? prev.propertyTaxValue : nextValue
+                                    }));
+                                  }}
+                                >
+                                  <p className="text-sm font-semibold">{option === 'Amount' ? 'Annual $' : 'Annual %'}</p>
+                                  <p className="text-xs text-slate-400">
+                                    {option === 'Amount' ? 'Total annual taxes' : 'Percent of home price'}
+                                  </p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <label className="flex flex-col gap-2">
+                          <span className="text-sm font-medium text-slate-200">
+                            Property taxes {mortgageForm.propertyTaxType === 'Percent' ? '(%)' : '($/year)'}
+                          </span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step={mortgageForm.propertyTaxType === 'Percent' ? 0.01 : 50}
+                            onKeyDown={preventInvalidNumericInput}
+                            className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2 text-base text-white focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                            value={mortgageForm.propertyTaxValue}
+                            onChange={event => handleMortgageChange('propertyTaxValue', event.target.value)}
+                            required
+                          />
+                          {propertyTaxAmountHint && (
+                            <span className="text-xs text-slate-400">
+                              Estimated annual amount:{' '}
+                              <span className="font-semibold text-slate-200">{propertyTaxAmountHint}</span>
+                            </span>
+                          )}
+                        </label>
+                      </div>
+                    )}
+
+                    {mortgageForm.includePmi && (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="flex flex-col gap-2">
+                          <span className="text-sm font-medium text-slate-200">PMI type</span>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {(['Amount', 'Percent'] as const).map(option => {
+                              const active = mortgageForm.pmiType === option;
+                              return (
+                                <button
+                                  key={option}
+                                  type="button"
+                                  className={`rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                                    active
+                                      ? 'border-brand-400 bg-brand-500/10 text-brand-100'
+                                      : 'border-slate-800/80 bg-slate-950/40 text-slate-300 hover:border-brand-700/40'
+                                  }`}
+                                  onClick={() => {
+                                    if (option === mortgageForm.pmiType) {
+                                      return;
+                                    }
+
+                                    const homePriceValue = parseNumber(mortgageForm.homePrice);
+                                    const downPaymentValue = parseNumber(mortgageForm.downPaymentValue);
+                                    const loanAmount = calculateLoanAmount(homePriceValue, downPaymentValue, mortgageForm.downPaymentType);
+                                    const pmiValue = parseNumber(mortgageForm.pmiValue);
+                                    const nextValue = convertAnnualValue(loanAmount, pmiValue, option);
+                                    setMortgageForm(prev => ({
+                                      ...prev,
+                                      pmiType: option,
+                                      pmiValue: nextValue === '' ? prev.pmiValue : nextValue
+                                    }));
+                                  }}
+                                >
+                                  <p className="text-sm font-semibold">{option === 'Amount' ? 'Annual $' : 'Annual %'}</p>
+                                  <p className="text-xs text-slate-400">
+                                    {option === 'Amount' ? 'Total annual PMI' : 'Percent of loan amount'}
+                                  </p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <label className="flex flex-col gap-2">
+                          <span className="text-sm font-medium text-slate-200">
+                            PMI {mortgageForm.pmiType === 'Percent' ? '(%)' : '($/year)'}
+                          </span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step={mortgageForm.pmiType === 'Percent' ? 0.01 : 25}
+                            onKeyDown={preventInvalidNumericInput}
+                            className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2 text-base text-white focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                            value={mortgageForm.pmiValue}
+                            onChange={event => handleMortgageChange('pmiValue', event.target.value)}
+                            required
+                          />
+                          {pmiAmountHint && (
+                            <span className="text-xs text-slate-400">
+                              Estimated annual amount:{' '}
+                              <span className="font-semibold text-slate-200">{pmiAmountHint}</span>
+                            </span>
+                          )}
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -505,12 +1029,14 @@ export default function App() {
                   onChange={event =>
                     isDebtMode
                       ? handleDebtChange('clientReference', event.target.value)
-                      : handleGrowthChange('clientReference', event.target.value)
+                      : isMortgageMode
+                        ? handleMortgageChange('clientReference', event.target.value)
+                        : handleGrowthChange('clientReference', event.target.value)
                   }
                 />
               </label>
 
-              {!isDebtMode && (
+              {!isDebtMode && !isMortgageMode && (
                 <div>
                   <span className="text-sm font-medium text-slate-200">Compounding cadence</span>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -580,6 +1106,17 @@ export default function App() {
                     <p className="text-sm uppercase tracking-wide text-brand-200">Ending balance</p>
                     <p className="text-4xl font-bold text-white">{result.data.currencyDisplay}</p>
                     <p className="text-xs text-slate-300">Calculated at {new Date(result.data.calculatedAt).toLocaleString()}</p>
+                  </div>
+                ) : result.kind === 'mortgage' ? (
+                  <div className="rounded-2xl border border-brand-500/40 bg-brand-500/10 p-5">
+                    <p className="text-sm uppercase tracking-wide text-brand-200">Total monthly payment</p>
+                    <p className="text-4xl font-bold text-white">{result.data.monthlyTotalPaymentDisplay}</p>
+                    <p className="text-xs text-slate-300">
+                      Calculated at {new Date(result.data.calculatedAt).toLocaleString()} · Loan {result.data.loanAmountDisplay}
+                    </p>
+                    <p className="text-xs text-slate-400">Principal & interest {result.data.monthlyPrincipalAndInterestDisplay}</p>
+                    <p className="text-xs text-slate-400">Property tax {result.data.monthlyPropertyTaxDisplay}</p>
+                    <p className="text-xs text-slate-400">PMI {result.data.monthlyPmiDisplay}</p>
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-brand-500/40 bg-brand-500/10 p-5">
