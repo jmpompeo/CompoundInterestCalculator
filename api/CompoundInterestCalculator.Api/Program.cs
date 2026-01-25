@@ -15,9 +15,8 @@ using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Reflection;
-using System.IO;
 using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.Extensions.Logging;
+using CompoundInterestCalculator.Api.Swagger;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
@@ -55,6 +54,7 @@ builder.Services.AddSwaggerGen(options =>
         Title = "Compound Interest Calculator API",
         Version = "v1"
     });
+    options.SchemaFilter<RequestExamplesSchemaFilter>();
 });
 
 builder.Services.AddProblemDetails();
