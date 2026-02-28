@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { DragEvent as ReactDragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addCategory,
   archiveCategory,
@@ -29,6 +29,8 @@ type ExpenseFormState = {
 };
 
 type TransactionSort = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc' | 'merchant-asc';
+type CategoryDropPlacement = 'before' | 'after';
+type BudgetSort = 'alpha-asc' | 'alpha-desc' | 'budget-desc' | 'spent-desc' | 'remaining-desc';
 
 const today = new Date();
 const monthString = (date: Date): string => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -60,11 +62,16 @@ export default function ExpenseTrackerPage() {
   const [minAmountFilter, setMinAmountFilter] = useState('');
   const [maxAmountFilter, setMaxAmountFilter] = useState('');
   const [sort, setSort] = useState<TransactionSort>('date-desc');
+  const [budgetSort, setBudgetSort] = useState<BudgetSort>('alpha-asc');
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [budgetNotice, setBudgetNotice] = useState<string | null>(null);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [isTransactionsCollapsed, setIsTransactionsCollapsed] = useState(false);
+  const [isBudgetsCollapsed, setIsBudgetsCollapsed] = useState(false);
+  const [isCategoryManagerCollapsed, setIsCategoryManagerCollapsed] = useState(false);
+  const [budgetSaveStatus, setBudgetSaveStatus] = useState<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({});
   const [form, setForm] = useState<ExpenseFormState>({
     amount: '',
     date: dateString(today),
@@ -75,6 +82,9 @@ export default function ExpenseTrackerPage() {
   });
 
   const formFieldRefs = useRef<Array<HTMLElement | null>>([]);
+  const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null);
+  const [dragOverCategory, setDragOverCategory] = useState<{ id: string; placement: CategoryDropPlacement } | null>(null);
+  const budgetStatusTimeouts = useRef<Record<string, number>>({});
 
   const activeCategories = useMemo(
     () => categories.filter(category => !category.isArchived),
@@ -186,6 +196,12 @@ export default function ExpenseTrackerPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeCategories, activeCategoryIds, latestExpense, selectedMonth]);
 
+  useEffect(() => {
+    return () => {
+      Object.values(budgetStatusTimeouts.current).forEach(timeoutId => window.clearTimeout(timeoutId));
+    };
+  }, []);
+
   const totalSpent = useMemo(() => expenses.reduce((sum, expense) => sum + expense.amountCents, 0), [expenses]);
 
   const spentByCategory = useMemo(() => {
@@ -194,6 +210,50 @@ export default function ExpenseTrackerPage() {
       return acc;
     }, {});
   }, [expenses]);
+
+  const sortedBudgets = useMemo(() => {
+    const sorted = [...activeCategories];
+    sorted.sort((a, b) => {
+      if (budgetSort === 'alpha-asc') {
+        return a.name.localeCompare(b.name);
+      }
+      if (budgetSort === 'alpha-desc') {
+        return b.name.localeCompare(a.name);
+      }
+
+      const aBudget = budgets[a.id] ?? 0;
+      const bBudget = budgets[b.id] ?? 0;
+      const aSpent = spentByCategory[a.id] ?? 0;
+      const bSpent = spentByCategory[b.id] ?? 0;
+      const aRemaining = aBudget - aSpent;
+      const bRemaining = bBudget - bSpent;
+
+      if (budgetSort === 'budget-desc') {
+        return bBudget - aBudget || a.name.localeCompare(b.name);
+      }
+      if (budgetSort === 'spent-desc') {
+        return bSpent - aSpent || a.name.localeCompare(b.name);
+      }
+      return bRemaining - aRemaining || a.name.localeCompare(b.name);
+    });
+
+    return sorted;
+  }, [activeCategories, budgetSort, budgets, spentByCategory]);
+
+  const sortedManagerCategories = useMemo(() => {
+    return [...activeCategories].sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeCategories]);
+
+  const budgetTotals = useMemo(() => {
+    return activeCategories.reduce(
+      (acc, category) => {
+        acc.spent += spentByCategory[category.id] ?? 0;
+        acc.budget += budgets[category.id] ?? 0;
+        return acc;
+      },
+      { spent: 0, budget: 0 }
+    );
+  }, [activeCategories, budgets, spentByCategory]);
 
   const filteredExpenses = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -247,6 +307,28 @@ export default function ExpenseTrackerPage() {
 
     return filtered;
   }, [categoryFilterId, expenses, maxAmountFilter, minAmountFilter, searchQuery, sort]);
+
+  const groupedExpensesByMerchant = useMemo(() => {
+    const order: Array<{ key: string; label: string; items: Expense[] }> = [];
+    const map = new Map<string, { label: string; items: Expense[] }>();
+
+    filteredExpenses.forEach(expense => {
+      const merchantLabel = (expense.merchant ?? '').trim() || 'Unknown merchant';
+      const key = merchantLabel.toLowerCase();
+      const existing = map.get(key);
+
+      if (!existing) {
+        const bucket = { label: merchantLabel, items: [expense] };
+        map.set(key, bucket);
+        order.push({ key, label: merchantLabel, items: bucket.items });
+        return;
+      }
+
+      existing.items.push(expense);
+    });
+
+    return order;
+  }, [filteredExpenses]);
 
   const monthLabel = useMemo(() => formatMonthLabel(selectedMonth), [selectedMonth]);
 
@@ -302,26 +384,67 @@ export default function ExpenseTrackerPage() {
     setError(null);
   };
 
-  const moveCategory = async (categoryId: string, direction: -1 | 1) => {
+  const moveCategoryByDrag = async (targetCategoryId: string, placement: CategoryDropPlacement) => {
     try {
-      const index = activeCategoryIds.indexOf(categoryId);
-      if (index < 0) {
+      if (!draggingCategoryId || draggingCategoryId === targetCategoryId) {
         return;
       }
 
-      const swapIndex = index + direction;
-      if (swapIndex < 0 || swapIndex >= activeCategoryIds.length) {
+      const orderedWithoutDragged = activeCategoryIds.filter(categoryId => categoryId !== draggingCategoryId);
+      const targetIndex = orderedWithoutDragged.indexOf(targetCategoryId);
+      if (targetIndex < 0) {
         return;
       }
 
-      const nextOrder = [...activeCategoryIds];
-      [nextOrder[index], nextOrder[swapIndex]] = [nextOrder[swapIndex], nextOrder[index]];
+      const insertionIndex = placement === 'after' ? targetIndex + 1 : targetIndex;
+      const nextOrder = [...orderedWithoutDragged];
+      nextOrder.splice(insertionIndex, 0, draggingCategoryId);
       await reorderCategories(nextOrder);
       await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Unable to reorder categories.');
+    } finally {
+      setDraggingCategoryId(null);
+      setDragOverCategory(null);
     }
+  };
+
+  const handleCategoryDragStart = (event: ReactDragEvent<HTMLDivElement>, categoryId: string) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', categoryId);
+    setDraggingCategoryId(categoryId);
+    setDragOverCategory(null);
+  };
+
+  const handleCategoryDragOver = (event: ReactDragEvent<HTMLDivElement>, categoryId: string) => {
+    if (!draggingCategoryId || draggingCategoryId === categoryId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const rect = event.currentTarget.getBoundingClientRect();
+    const placement: CategoryDropPlacement = event.clientY >= rect.top + rect.height / 2 ? 'after' : 'before';
+
+    setDragOverCategory(current => {
+      if (current?.id === categoryId && current.placement === placement) {
+        return current;
+      }
+
+      return { id: categoryId, placement };
+    });
+  };
+
+  const handleCategoryDrop = async (event: ReactDragEvent<HTMLDivElement>, categoryId: string) => {
+    event.preventDefault();
+    const placement = dragOverCategory?.id === categoryId ? dragOverCategory.placement : 'before';
+    await moveCategoryByDrag(categoryId, placement);
+  };
+
+  const handleCategoryDragEnd = () => {
+    setDraggingCategoryId(null);
+    setDragOverCategory(null);
   };
 
   const handleAddCategory = async (event: FormEvent) => {
@@ -346,20 +469,34 @@ export default function ExpenseTrackerPage() {
     }
   };
 
-  const handleBudgetSave = async (categoryId: string) => {
+  const handleBudgetAutoSave = async (categoryId: string) => {
     try {
-      const amount = Number(budgetInputs[categoryId] ?? '0');
+      const rawValue = budgetInputs[categoryId] ?? '';
+      const amount = Number(rawValue);
       if (!Number.isFinite(amount) || amount < 0) {
-        setError('Budget must be zero or a positive value.');
+        setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'error' }));
         return;
       }
 
       const amountCents = Math.round(amount * 100);
+      const current = budgets[categoryId] ?? 0;
+      if (amountCents === current) {
+        setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'idle' }));
+        return;
+      }
+
+      setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'saving' }));
       await upsertBudget(selectedMonth, categoryId, amountCents);
       setBudgets(prev => ({ ...prev, [categoryId]: amountCents }));
-      setError(null);
+      setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'saved' }));
+      if (budgetStatusTimeouts.current[categoryId]) {
+        window.clearTimeout(budgetStatusTimeouts.current[categoryId]);
+      }
+      budgetStatusTimeouts.current[categoryId] = window.setTimeout(() => {
+        setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'idle' }));
+      }, 1500);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Unable to save budget.');
+      setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'error' }));
     }
   };
 
@@ -596,164 +733,298 @@ export default function ExpenseTrackerPage() {
         {budgetNotice && <p className="rounded bg-sky-500/20 p-3 text-sm text-sky-200">{budgetNotice}</p>}
 
         <section className="rounded-2xl bg-slate-900 p-5">
-          <h2 className="mb-3 text-xl font-semibold">Category manager</h2>
-          <form className="mb-4 flex flex-wrap gap-2" onSubmit={handleAddCategory}>
-            <input
-              className="min-w-60 flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-              placeholder="Add category name"
-              value={newCategoryName}
-              onChange={event => setNewCategoryName(event.target.value)}
-            />
-            <button className="rounded border border-slate-700 px-3 py-2 text-sm" type="submit">Add category</button>
-          </form>
+          <button
+            type="button"
+            className="mb-3 flex w-full items-center justify-between text-left"
+            onClick={() => setIsTransactionsCollapsed(prev => !prev)}
+            aria-expanded={!isTransactionsCollapsed}
+          >
+            <h2 className="text-xl font-semibold">Transactions</h2>
+            <span className="text-xs text-slate-400">{isTransactionsCollapsed ? 'Expand' : 'Collapse'}</span>
+          </button>
 
-          <div className="space-y-2">
-            {activeCategories.map((category, index) => (
-              <div key={category.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 p-3 text-sm">
-                <p className="font-medium">
-                  {category.name}
-                  {category.isDefault ? <span className="ml-2 text-xs text-slate-400">default</span> : null}
+          {isTransactionsCollapsed ? (
+            latestExpense ? (
+              <div className="rounded border border-slate-800 p-3 text-sm">
+                <p className="text-xs uppercase tracking-wide text-slate-400">Last transaction entered</p>
+                <p className="mt-1 font-medium">{latestExpense.merchant || latestExpense.note || 'Expense'}</p>
+                <p className="text-slate-400">
+                  {latestExpense.date} • {categories.find(item => item.id === latestExpense.categoryId)?.name ?? 'Uncategorized'}
                 </p>
-                <div className="flex items-center gap-2">
-                  <button className="rounded border border-slate-700 px-2 py-1 text-xs" onClick={() => moveCategory(category.id, -1)} disabled={index === 0}>
-                    Up
-                  </button>
-                  <button className="rounded border border-slate-700 px-2 py-1 text-xs" onClick={() => moveCategory(category.id, 1)} disabled={index === activeCategories.length - 1}>
-                    Down
-                  </button>
-                  <button className="rounded border border-amber-700 px-2 py-1 text-xs text-amber-300" onClick={() => handleArchiveCategory(category.id)}>
-                    Archive
-                  </button>
-                </div>
+                <p className="mt-1 font-semibold">{formatCurrency(latestExpense.amountCents)}</p>
               </div>
-            ))}
-          </div>
-
-          <div className="mt-4 text-sm text-slate-400">
-            <p className="font-medium text-slate-300">Archived categories</p>
-            {categories.filter(category => category.isArchived).length === 0 ? (
-              <p>None</p>
             ) : (
-              <p>{categories.filter(category => category.isArchived).map(category => category.name).join(', ')}</p>
-            )}
-          </div>
-        </section>
+              <p className="text-sm text-slate-400">No transactions yet for this month.</p>
+            )
+          ) : (
+            <>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-slate-400">{filteredExpenses.length} shown</p>
+              </div>
+              <div className="mb-4 grid gap-3 rounded border border-slate-800 p-3 sm:grid-cols-2 lg:grid-cols-5">
+                <label className="flex flex-col gap-1 text-xs text-slate-300 lg:col-span-2">Search (merchant/note)
+                  <input
+                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
+                    placeholder="Coffee, Amazon, membership..."
+                    value={searchQuery}
+                    onChange={event => setSearchQuery(event.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-slate-300">Category
+                  <select
+                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
+                    value={categoryFilterId}
+                    onChange={event => setCategoryFilterId(event.target.value)}
+                  >
+                    <option value="">All categories</option>
+                    {categories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.isArchived ? `${category.name} (archived)` : category.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-slate-300">Min ($)
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
+                    value={minAmountFilter}
+                    onChange={event => setMinAmountFilter(event.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-slate-300">Max ($)
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
+                    value={maxAmountFilter}
+                    onChange={event => setMaxAmountFilter(event.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-slate-300 lg:col-span-2">Sort
+                  <select
+                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
+                    value={sort}
+                    onChange={event => setSort(event.target.value as TransactionSort)}
+                  >
+                    <option value="date-desc">Newest first</option>
+                    <option value="date-asc">Oldest first</option>
+                    <option value="amount-desc">Amount: high to low</option>
+                    <option value="amount-asc">Amount: low to high</option>
+                    <option value="merchant-asc">Merchant/note A-Z</option>
+                  </select>
+                </label>
+              </div>
 
-        <section className="rounded-2xl bg-slate-900 p-5">
-          <h2 className="mb-3 text-xl font-semibold">Category budgets</h2>
-          <div className="space-y-3">
-            {activeCategories.map(category => {
-              const spent = spentByCategory[category.id] ?? 0;
-              const budget = budgets[category.id] ?? 0;
-              const delta = budget - spent;
-
-              return (
-                <div key={category.id} className="grid gap-2 rounded border border-slate-800 p-3 sm:grid-cols-[2fr,1fr,1fr,auto] sm:items-center">
-                  <p className="font-medium">{category.name}</p>
-                  <p className="text-sm">Spent: {formatCurrency(spent)}</p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="w-28 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
-                      placeholder="Budget"
-                      value={budgetInputs[category.id] ?? ''}
-                      onChange={e => setBudgetInputs(prev => ({ ...prev, [category.id]: e.target.value }))}
-                    />
-                    <button className="rounded border border-slate-700 px-2 py-1 text-xs" onClick={() => handleBudgetSave(category.id)}>Save</button>
+              <div className="space-y-4">
+                {groupedExpensesByMerchant.length === 0 && (
+                  <p className="text-sm text-slate-400">No matching expenses for this month.</p>
+                )}
+                {groupedExpensesByMerchant.map(group => (
+                  <div key={group.key} className="space-y-2">
+                    <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+                      <p>{group.label}</p>
+                      <p>{group.items.length} transaction{group.items.length === 1 ? '' : 's'}</p>
+                    </div>
+                    {group.items.map(expense => {
+                      const category = categories.find(item => item.id === expense.categoryId);
+                      return (
+                        <div key={expense.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-800 p-3 text-sm">
+                          <div>
+                            <p className="font-medium">{expense.note || expense.merchant || 'Expense'}</p>
+                            <p className="text-slate-400">{expense.date} • {category?.name ?? 'Uncategorized'}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold">{formatCurrency(expense.amountCents)}</p>
+                            <button className="rounded border border-slate-700 px-2 py-1 text-xs" onClick={() => handleEdit(expense)}>Edit</button>
+                            <button className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-300" onClick={() => handleDelete(expense.id)}>Delete</button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p className={`text-sm font-semibold ${delta >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                    {delta >= 0 ? 'Remaining' : 'Over'}: {formatCurrency(Math.abs(delta))}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+                ))}
+              </div>
+            </>
+          )}
         </section>
 
         <section className="rounded-2xl bg-slate-900 p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold">Transactions</h2>
-            <p className="text-xs text-slate-400">{filteredExpenses.length} shown</p>
+            <button
+              type="button"
+              className="flex items-center gap-3 text-left"
+              onClick={() => setIsBudgetsCollapsed(prev => !prev)}
+              aria-expanded={!isBudgetsCollapsed}
+            >
+              <h2 className="text-xl font-semibold">Category budgets</h2>
+              <span className="text-xs text-slate-400">{isBudgetsCollapsed ? 'Expand' : 'Collapse'}</span>
+            </button>
+            {!isBudgetsCollapsed && (
+              <label className="flex items-center gap-2 text-xs text-slate-400">
+                Sort
+                <select
+                  className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200"
+                  value={budgetSort}
+                  onChange={event => setBudgetSort(event.target.value as BudgetSort)}
+                >
+                  <option value="alpha-asc">A → Z</option>
+                  <option value="alpha-desc">Z → A</option>
+                  <option value="budget-desc">Highest budget</option>
+                  <option value="spent-desc">Highest spent</option>
+                  <option value="remaining-desc">Highest remaining</option>
+                </select>
+              </label>
+            )}
           </div>
-          <div className="mb-4 grid gap-3 rounded border border-slate-800 p-3 sm:grid-cols-2 lg:grid-cols-5">
-            <label className="flex flex-col gap-1 text-xs text-slate-300 lg:col-span-2">Search (merchant/note)
-              <input
-                className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
-                placeholder="Coffee, Amazon, membership..."
-                value={searchQuery}
-                onChange={event => setSearchQuery(event.target.value)}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-slate-300">Category
-              <select
-                className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
-                value={categoryFilterId}
-                onChange={event => setCategoryFilterId(event.target.value)}
-              >
-                <option value="">All categories</option>
-                {categories.map(category => (
-                  <option key={category.id} value={category.id}>
-                    {category.isArchived ? `${category.name} (archived)` : category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-slate-300">Min ($)
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
-                value={minAmountFilter}
-                onChange={event => setMinAmountFilter(event.target.value)}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-slate-300">Max ($)
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
-                value={maxAmountFilter}
-                onChange={event => setMaxAmountFilter(event.target.value)}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-slate-300 lg:col-span-2">Sort
-              <select
-                className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
-                value={sort}
-                onChange={event => setSort(event.target.value as TransactionSort)}
-              >
-                <option value="date-desc">Newest first</option>
-                <option value="date-asc">Oldest first</option>
-                <option value="amount-desc">Amount: high to low</option>
-                <option value="amount-asc">Amount: low to high</option>
-                <option value="merchant-asc">Merchant/note A-Z</option>
-              </select>
-            </label>
-          </div>
+          {!isBudgetsCollapsed && (
+            <div className="rounded border border-slate-800">
+              <div className="hidden items-center gap-x-3 border-b border-slate-800 px-3 py-2 text-xs uppercase tracking-wide text-slate-400 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)]">
+                <div>Category</div>
+                <div className="justify-self-end text-right">Budget</div>
+                <div className="justify-self-end text-right">Spent</div>
+                <div className="justify-self-end text-right">Remaining</div>
+                <div className="justify-self-end text-right">Status</div>
+              </div>
+              <div className="divide-y divide-slate-800">
+                {sortedBudgets.map(category => {
+                  const spent = spentByCategory[category.id] ?? 0;
+                  const budget = budgets[category.id] ?? 0;
+                  const delta = budget - spent;
+                  const status = budgetSaveStatus[category.id] ?? 'idle';
+                  const statusLabel = status === 'saving'
+                    ? 'Saving...'
+                    : status === 'saved'
+                      ? 'Saved'
+                      : status === 'error'
+                        ? 'Error'
+                        : '';
 
-          <div className="space-y-2">
-            {filteredExpenses.length === 0 && <p className="text-sm text-slate-400">No matching expenses for this month.</p>}
-            {filteredExpenses.map(expense => {
-              const category = categories.find(item => item.id === expense.categoryId);
-              return (
-                <div key={expense.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-800 p-3 text-sm">
-                  <div>
-                    <p className="font-medium">{expense.merchant || expense.note || 'Expense'}</p>
-                    <p className="text-slate-400">{expense.date} • {category?.name ?? 'Uncategorized'}</p>
+                  return (
+                    <div
+                      key={category.id}
+                      className="grid grid-cols-2 gap-x-3 gap-y-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)]"
+                    >
+                      <div className="order-1 font-medium sm:order-none">{category.name}</div>
+                      <div className="order-4 justify-self-stretch sm:order-none">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          inputMode="decimal"
+                          className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm tabular-nums"
+                          value={budgetInputs[category.id] ?? ''}
+                          onChange={e => setBudgetInputs(prev => ({ ...prev, [category.id]: e.target.value }))}
+                          onBlur={() => void handleBudgetAutoSave(category.id)}
+                          onKeyDown={event => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            }
+                          }}
+                          aria-label={`Budget for ${category.name}`}
+                        />
+                      </div>
+                      <div className="order-3 justify-self-end text-right tabular-nums text-slate-300 sm:order-none">{formatCurrency(spent)}</div>
+                      <div
+                        className={`order-2 justify-self-end text-right font-semibold tabular-nums sm:order-none ${
+                          delta >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                        }`}
+                      >
+                        {formatCurrency(delta)}
+                      </div>
+                      <div
+                        className={`order-5 col-span-2 justify-self-end text-right text-xs sm:col-span-1 sm:order-none ${
+                          status === 'error' ? 'text-rose-300' : status === 'saved' ? 'text-emerald-300' : 'text-slate-400'
+                        }`}
+                      >
+                        {statusLabel}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/40 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)]">
+                  <div className="order-1 font-semibold text-slate-200 sm:order-none">Total</div>
+                  <div className="order-4 justify-self-end text-right font-semibold tabular-nums text-slate-200 sm:order-none">
+                    {formatCurrency(budgetTotals.budget)}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold">{formatCurrency(expense.amountCents)}</p>
-                    <button className="rounded border border-slate-700 px-2 py-1 text-xs" onClick={() => handleEdit(expense)}>Edit</button>
-                    <button className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-300" onClick={() => handleDelete(expense.id)}>Delete</button>
+                  <div className="order-3 justify-self-end text-right font-semibold tabular-nums text-slate-200 sm:order-none">
+                    {formatCurrency(budgetTotals.spent)}
                   </div>
+                  <div className="order-2 justify-self-end text-right text-slate-500 sm:order-none">—</div>
+                  <div className="order-5 col-span-2 justify-self-end text-right text-xs text-slate-500 sm:col-span-1 sm:order-none">Totals</div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            </div>
+          )}
+          {isBudgetsCollapsed && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-300">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">Total budget</span>
+                <span className="font-semibold tabular-nums text-slate-200">{formatCurrency(budgetTotals.budget)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">Total spent</span>
+                <span className="font-semibold tabular-nums text-slate-200">{formatCurrency(budgetTotals.spent)}</span>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl bg-slate-900 p-5">
+          <button
+            type="button"
+            className="mb-3 flex w-full items-center justify-between text-left"
+            onClick={() => setIsCategoryManagerCollapsed(prev => !prev)}
+            aria-expanded={!isCategoryManagerCollapsed}
+          >
+            <h2 className="text-xl font-semibold">Category manager</h2>
+            <span className="text-xs text-slate-400">{isCategoryManagerCollapsed ? 'Expand' : 'Collapse'}</span>
+          </button>
+          {!isCategoryManagerCollapsed && (
+            <>
+              <form className="mb-4 flex flex-wrap gap-2" onSubmit={handleAddCategory}>
+                <input
+                  className="min-w-60 flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                  placeholder="Add category name"
+                  value={newCategoryName}
+                  onChange={event => setNewCategoryName(event.target.value)}
+                />
+                <button className="rounded border border-slate-700 px-3 py-2 text-sm" type="submit">Add category</button>
+              </form>
+
+              <div className="space-y-2">
+                {sortedManagerCategories.map(category => (
+                  <div
+                    key={category.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 p-3 text-sm"
+                  >
+                    <p className="font-medium">
+                      {category.name}
+                      {category.isDefault ? <span className="ml-2 text-xs text-slate-400">default</span> : null}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button className="rounded border border-amber-700 px-2 py-1 text-xs text-amber-300" onClick={() => handleArchiveCategory(category.id)}>
+                        Archive
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 text-sm text-slate-400">
+                <p className="font-medium text-slate-300">Archived categories</p>
+                {categories.filter(category => category.isArchived).length === 0 ? (
+                  <p>None</p>
+                ) : (
+                  <p>{categories.filter(category => category.isArchived).map(category => category.name).join(', ')}</p>
+                )}
+              </div>
+            </>
+          )}
         </section>
       </div>
     </div>
