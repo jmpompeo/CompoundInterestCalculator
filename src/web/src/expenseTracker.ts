@@ -3,6 +3,7 @@ export type Category = {
   name: string;
   isDefault: boolean;
   isArchived: boolean;
+  sortOrder: number;
 };
 
 export type Budget = {
@@ -102,6 +103,24 @@ const createId = (): string =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+const normalizeCategories = (categories: Category[]): Category[] =>
+  categories
+    .sort((a, b) => {
+      const aOrder = Number.isFinite(a.sortOrder) ? a.sortOrder : Number.MAX_SAFE_INTEGER;
+      const bOrder = Number.isFinite(b.sortOrder) ? b.sortOrder : Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder || a.name.localeCompare(b.name);
+    })
+    .map((category, index) => ({
+      ...category,
+      sortOrder: Number.isFinite(category.sortOrder) ? category.sortOrder : index
+    }));
+
+const getPreviousMonth = (month: string): string => {
+  const [year, monthPart] = month.split('-').map(Number);
+  const previous = new Date(year, monthPart - 2, 1);
+  return `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export const seedDefaultCategories = async (): Promise<void> => {
   await runTransaction(['categories'], 'readwrite', async tx => {
     const store = tx.objectStore('categories');
@@ -111,12 +130,13 @@ export const seedDefaultCategories = async (): Promise<void> => {
       return;
     }
 
-    DEFAULT_CATEGORY_NAMES.forEach(name => {
+    DEFAULT_CATEGORY_NAMES.forEach((name, index) => {
       store.put({
         id: createId(),
         name,
         isDefault: true,
-        isArchived: false
+        isArchived: false,
+        sortOrder: index
       } satisfies Category);
     });
   });
@@ -125,8 +145,77 @@ export const seedDefaultCategories = async (): Promise<void> => {
 export const getCategories = async (): Promise<Category[]> =>
   runTransaction(['categories'], 'readonly', async tx => {
     const categories = await requestAsPromise(tx.objectStore('categories').getAll());
-    return (categories as Category[]).sort((a, b) => a.name.localeCompare(b.name));
+    return normalizeCategories(categories as Category[]);
   });
+
+export const addCategory = async (name: string): Promise<Category> =>
+  runTransaction(['categories'], 'readwrite', async tx => {
+    const store = tx.objectStore('categories');
+    const categories = normalizeCategories((await requestAsPromise(store.getAll())) as Category[]);
+    const trimmedName = name.trim();
+
+    if (!trimmedName) {
+      throw new Error('Category name is required.');
+    }
+
+    if (categories.some(category => category.name.toLowerCase() === trimmedName.toLowerCase())) {
+      throw new Error('A category with this name already exists.');
+    }
+
+    const nextCategory: Category = {
+      id: createId(),
+      name: trimmedName,
+      isDefault: false,
+      isArchived: false,
+      sortOrder: categories.length
+    };
+
+    store.put(nextCategory);
+    return nextCategory;
+  });
+
+export const reorderCategories = async (orderedCategoryIds: string[]): Promise<void> => {
+  await runTransaction(['categories'], 'readwrite', async tx => {
+    const store = tx.objectStore('categories');
+    const categories = normalizeCategories((await requestAsPromise(store.getAll())) as Category[]);
+    const byId = new Map(categories.map(category => [category.id, category] as const));
+    const seen = new Set<string>();
+    let sortOrder = 0;
+
+    orderedCategoryIds.forEach(categoryId => {
+      const category = byId.get(categoryId);
+      if (!category || seen.has(categoryId)) {
+        return;
+      }
+
+      seen.add(categoryId);
+      store.put({ ...category, sortOrder });
+      sortOrder += 1;
+    });
+
+    categories.forEach(category => {
+      if (seen.has(category.id)) {
+        return;
+      }
+
+      store.put({ ...category, sortOrder });
+      sortOrder += 1;
+    });
+  });
+};
+
+export const archiveCategory = async (categoryId: string): Promise<void> => {
+  await runTransaction(['categories'], 'readwrite', async tx => {
+    const store = tx.objectStore('categories');
+    const category = (await requestAsPromise(store.get(categoryId))) as Category | undefined;
+
+    if (!category) {
+      throw new Error('Category not found.');
+    }
+
+    store.put({ ...category, isArchived: true });
+  });
+};
 
 export const getExpensesByMonth = async (month: string): Promise<Expense[]> => {
   const [year, monthPart] = month.split('-').map(Number);
@@ -147,6 +236,36 @@ export const getBudgetsByMonth = async (month: string): Promise<Budget[]> =>
     const index = tx.objectStore('budgets').index('month');
     const budgets = await requestAsPromise(index.getAll(month));
     return budgets as Budget[];
+  });
+
+export const autoCopyBudgetsFromPreviousMonth = async (
+  month: string
+): Promise<{ copiedCount: number; sourceMonth: string | null }> =>
+  runTransaction(['budgets'], 'readwrite', async tx => {
+    const store = tx.objectStore('budgets');
+    const index = store.index('month');
+    const targetBudgets = (await requestAsPromise(index.getAll(month))) as Budget[];
+
+    if (targetBudgets.length > 0) {
+      return { copiedCount: 0, sourceMonth: null };
+    }
+
+    const sourceMonth = getPreviousMonth(month);
+    const previousBudgets = (await requestAsPromise(index.getAll(sourceMonth))) as Budget[];
+
+    if (previousBudgets.length === 0) {
+      return { copiedCount: 0, sourceMonth: null };
+    }
+
+    previousBudgets.forEach(budget => {
+      store.put({
+        ...budget,
+        id: createId(),
+        month
+      } satisfies Budget);
+    });
+
+    return { copiedCount: previousBudgets.length, sourceMonth };
   });
 
 export const upsertBudget = async (month: string, categoryId: string, amountCents: number): Promise<Budget> =>
@@ -200,6 +319,31 @@ export const deleteExpense = async (id: string): Promise<void> => {
     tx.objectStore('expenses').delete(id);
   });
 };
+
+export const getRecentMerchants = async (limit = 8): Promise<string[]> =>
+  runTransaction(['expenses'], 'readonly', async tx => {
+    const expenses = (await requestAsPromise(tx.objectStore('expenses').getAll())) as Expense[];
+    const sorted = expenses.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+    const seen = new Set<string>();
+    const merchants: string[] = [];
+
+    sorted.forEach(expense => {
+      const merchant = expense.merchant?.trim();
+      if (!merchant) {
+        return;
+      }
+
+      const key = merchant.toLowerCase();
+      if (seen.has(key) || merchants.length >= limit) {
+        return;
+      }
+
+      seen.add(key);
+      merchants.push(merchant);
+    });
+
+    return merchants;
+  });
 
 export const getLastUsedCategory = (): string | null => localStorage.getItem(LAST_CATEGORY_KEY);
 
