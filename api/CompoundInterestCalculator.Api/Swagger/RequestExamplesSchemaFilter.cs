@@ -1,67 +1,67 @@
 using CompoundInterestCalculator.Api.Models.Requests;
-using Microsoft.OpenApi.Any;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
+using System.Text.Json.Nodes;
 
 namespace CompoundInterestCalculator.Api.Swagger;
 
 public sealed class RequestExamplesSchemaFilter : ISchemaFilter
 {
-    public void Apply(OpenApiSchema schema, SchemaFilterContext context)
+    public void Apply(IOpenApiSchema schema, SchemaFilterContext context)
     {
-        if (schema.Example is not null)
+        if (schema is not OpenApiSchema mutableSchema || mutableSchema.Example is not null)
         {
             return;
         }
 
-        schema.Example = context.Type switch
+        mutableSchema.Example = context.Type switch
         {
             var t when t == typeof(SavingsGrowthRequestDto) => BuildSavingsGrowthExample(),
             var t when t == typeof(ContributionGrowthRequestDto) => BuildContributionGrowthExample(),
             var t when t == typeof(MortgageEstimateRequestDto) => BuildMortgageEstimateExample(),
             var t when t == typeof(DebtPayoffRequestDto) => BuildDebtPayoffExample(),
-            _ => schema.Example
+            _ => mutableSchema.Example
         };
     }
 
-    private static OpenApiObject BuildSavingsGrowthExample() => new()
+    private static JsonObject BuildSavingsGrowthExample() => new()
     {
-        ["principal"] = new OpenApiDouble(10_000d),
-        ["annualRatePercent"] = new OpenApiDouble(5.25d),
-        ["compoundingCadence"] = new OpenApiString("Monthly"),
-        ["durationYears"] = new OpenApiInteger(10),
-        ["clientReference"] = new OpenApiString("planning-demo")
+        ["principal"] = JsonValue.Create(10_000m),
+        ["annualRatePercent"] = JsonValue.Create(5.25m),
+        ["compoundingCadence"] = JsonValue.Create("Monthly"),
+        ["durationYears"] = JsonValue.Create(10),
+        ["clientReference"] = JsonValue.Create("planning-demo")
     };
 
-    private static OpenApiObject BuildContributionGrowthExample() => new()
+    private static JsonObject BuildContributionGrowthExample() => new()
     {
-        ["principal"] = new OpenApiDouble(5_000d),
-        ["annualRatePercent"] = new OpenApiDouble(6.0d),
-        ["compoundingCadence"] = new OpenApiString("Monthly"),
-        ["durationYears"] = new OpenApiInteger(20),
-        ["monthlyContribution"] = new OpenApiDouble(200d),
-        ["clientReference"] = new OpenApiString("contrib-demo")
+        ["principal"] = JsonValue.Create(5_000m),
+        ["annualRatePercent"] = JsonValue.Create(6.0m),
+        ["compoundingCadence"] = JsonValue.Create("Monthly"),
+        ["durationYears"] = JsonValue.Create(20),
+        ["monthlyContribution"] = JsonValue.Create(200m),
+        ["clientReference"] = JsonValue.Create("contrib-demo")
     };
 
-    private static OpenApiObject BuildMortgageEstimateExample() => new()
+    private static JsonObject BuildMortgageEstimateExample() => new()
     {
-        ["homePrice"] = new OpenApiDouble(400_000d),
-        ["downPaymentValue"] = new OpenApiDouble(80_000d),
-        ["downPaymentType"] = new OpenApiString("Amount"),
-        ["annualRatePercent"] = new OpenApiDouble(6.25d),
-        ["termYears"] = new OpenApiInteger(30),
-        ["propertyTaxType"] = new OpenApiString("Percent"),
-        ["propertyTaxValue"] = new OpenApiDouble(1.1d),
-        ["pmiType"] = new OpenApiString("Percent"),
-        ["pmiValue"] = new OpenApiDouble(0.5d),
-        ["clientReference"] = new OpenApiString("mortgage-demo")
+        ["homePrice"] = JsonValue.Create(400_000m),
+        ["downPaymentValue"] = JsonValue.Create(80_000m),
+        ["downPaymentType"] = JsonValue.Create("Amount"),
+        ["annualRatePercent"] = JsonValue.Create(6.25m),
+        ["termYears"] = JsonValue.Create(30),
+        ["propertyTaxType"] = JsonValue.Create("Percent"),
+        ["propertyTaxValue"] = JsonValue.Create(1.1m),
+        ["pmiType"] = JsonValue.Create("Percent"),
+        ["pmiValue"] = JsonValue.Create(0.5m),
+        ["clientReference"] = JsonValue.Create("mortgage-demo")
     };
 
-    private static OpenApiObject BuildDebtPayoffExample() => new()
+    private static JsonObject BuildDebtPayoffExample() => new()
     {
-        ["totalDebt"] = new OpenApiDouble(15_000d),
-        ["monthlyPayment"] = new OpenApiDouble(400d),
-        ["monthlyRatePercent"] = new OpenApiDouble(1.0d),
-        ["clientReference"] = new OpenApiString("debt-demo")
+        ["totalDebt"] = JsonValue.Create(15_000m),
+        ["monthlyPayment"] = JsonValue.Create(400m),
+        ["monthlyRatePercent"] = JsonValue.Create(1.0m),
+        ["clientReference"] = JsonValue.Create("debt-demo")
     };
 }

@@ -8,7 +8,7 @@ using CompoundInterestCalculator.Api.Telemetry;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Mvc.Versioning;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using FluentValidation.AspNetCore;
 using CompoundInterestCalculator.Api.Validation;
 using FluentValidation;
