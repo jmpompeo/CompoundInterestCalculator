@@ -1,8 +1,15 @@
 export type Category = {
   id: string;
   name: string;
+  subcategoryId?: string | null;
   isDefault: boolean;
   isArchived: boolean;
+  sortOrder: number;
+};
+
+export type Subcategory = {
+  id: string;
+  name: string;
   sortOrder: number;
 };
 
@@ -25,8 +32,22 @@ export type Expense = {
 };
 
 const DB_NAME = 'expense-tracker-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const LAST_CATEGORY_KEY = 'expense-tracker-last-category';
+
+const DEFAULT_SUBCATEGORY_NAMES = ['Bills', 'Savings', 'Debts', 'Subscriptions', 'Variable Spending'];
+
+const DEFAULT_CATEGORY_SUBCATEGORY_MAP: Record<string, string> = {
+  Rent: 'Bills',
+  Gas: 'Bills',
+  Utilities: 'Bills',
+  Insurance: 'Bills',
+  Healthcare: 'Bills',
+  Subscriptions: 'Subscriptions',
+  Groceries: 'Variable Spending',
+  'Dining Out': 'Variable Spending',
+  Entertainment: 'Variable Spending'
+};
 
 const DEFAULT_CATEGORY_NAMES = [
   'Groceries',
@@ -49,6 +70,10 @@ const openDb = async (): Promise<IDBDatabase> =>
 
     request.onupgradeneeded = () => {
       const db = request.result;
+
+      if (!db.objectStoreNames.contains('subcategories')) {
+        db.createObjectStore('subcategories', { keyPath: 'id' });
+      }
 
       if (!db.objectStoreNames.contains('categories')) {
         db.createObjectStore('categories', { keyPath: 'id' });
@@ -103,23 +128,90 @@ const createId = (): string =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-const normalizeCategories = (categories: Category[]): Category[] =>
-  categories
-    .sort((a, b) => {
-      const aOrder = Number.isFinite(a.sortOrder) ? a.sortOrder : Number.MAX_SAFE_INTEGER;
-      const bOrder = Number.isFinite(b.sortOrder) ? b.sortOrder : Number.MAX_SAFE_INTEGER;
-      return aOrder - bOrder || a.name.localeCompare(b.name);
-    })
-    .map((category, index) => ({
-      ...category,
-      sortOrder: Number.isFinite(category.sortOrder) ? category.sortOrder : index
-    }));
+const normalizeCategories = (categories: Category[]): Category[] => {
+  const normalized = categories.map((category, index) => ({
+    ...category,
+    sortOrder: Number.isFinite(category.sortOrder) ? category.sortOrder : index
+  }));
+
+  normalized.sort((a, b) => {
+    const aOrder = Number.isFinite(a.sortOrder) ? a.sortOrder : Number.MAX_SAFE_INTEGER;
+    const bOrder = Number.isFinite(b.sortOrder) ? b.sortOrder : Number.MAX_SAFE_INTEGER;
+    return aOrder - bOrder || a.name.localeCompare(b.name);
+  });
+
+  return normalized;
+};
+
+const normalizeSubcategories = (subcategories: Subcategory[]): Subcategory[] => {
+  const normalized = subcategories.map((subcategory, index) => ({
+    ...subcategory,
+    sortOrder: Number.isFinite(subcategory.sortOrder) ? subcategory.sortOrder : index
+  }));
+
+  normalized.sort((a, b) => {
+    const aOrder = Number.isFinite(a.sortOrder) ? a.sortOrder : Number.MAX_SAFE_INTEGER;
+    const bOrder = Number.isFinite(b.sortOrder) ? b.sortOrder : Number.MAX_SAFE_INTEGER;
+    return aOrder - bOrder || a.name.localeCompare(b.name);
+  });
+
+  return normalized;
+};
 
 const getPreviousMonth = (month: string): string => {
   const [year, monthPart] = month.split('-').map(Number);
   const previous = new Date(year, monthPart - 2, 1);
   return `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`;
 };
+
+export const seedDefaultSubcategories = async (): Promise<void> => {
+  await runTransaction(['subcategories'], 'readwrite', async tx => {
+    const store = tx.objectStore('subcategories');
+    const existing = await requestAsPromise(store.getAll());
+
+    if (existing.length > 0) {
+      return;
+    }
+
+    DEFAULT_SUBCATEGORY_NAMES.forEach((name, index) => {
+      store.put({
+        id: createId(),
+        name,
+        sortOrder: index
+      } satisfies Subcategory);
+    });
+  });
+};
+
+export const getSubcategories = async (): Promise<Subcategory[]> =>
+  runTransaction(['subcategories'], 'readonly', async tx => {
+    const subcategories = await requestAsPromise(tx.objectStore('subcategories').getAll());
+    return normalizeSubcategories(subcategories as Subcategory[]);
+  });
+
+export const addSubcategory = async (name: string): Promise<Subcategory> =>
+  runTransaction(['subcategories'], 'readwrite', async tx => {
+    const store = tx.objectStore('subcategories');
+    const subcategories = normalizeSubcategories((await requestAsPromise(store.getAll())) as Subcategory[]);
+    const trimmedName = name.trim();
+
+    if (!trimmedName) {
+      throw new Error('Subcategory name is required.');
+    }
+
+    if (subcategories.some(subcategory => subcategory.name.toLowerCase() === trimmedName.toLowerCase())) {
+      throw new Error('A subcategory with this name already exists.');
+    }
+
+    const nextSubcategory: Subcategory = {
+      id: createId(),
+      name: trimmedName,
+      sortOrder: subcategories.length
+    };
+
+    store.put(nextSubcategory);
+    return nextSubcategory;
+  });
 
 export const seedDefaultCategories = async (): Promise<void> => {
   await runTransaction(['categories'], 'readwrite', async tx => {
@@ -130,10 +222,16 @@ export const seedDefaultCategories = async (): Promise<void> => {
       return;
     }
 
+    const subcategoryStore = tx.objectStore('subcategories');
+    const subcategories = normalizeSubcategories((await requestAsPromise(subcategoryStore.getAll())) as Subcategory[]);
+    const subcategoryByName = new Map(subcategories.map(subcategory => [subcategory.name, subcategory.id] as const));
+
     DEFAULT_CATEGORY_NAMES.forEach((name, index) => {
+      const mappedSubcategory = DEFAULT_CATEGORY_SUBCATEGORY_MAP[name];
       store.put({
         id: createId(),
         name,
+        subcategoryId: mappedSubcategory ? subcategoryByName.get(mappedSubcategory) ?? null : null,
         isDefault: true,
         isArchived: false,
         sortOrder: index
@@ -148,31 +246,68 @@ export const getCategories = async (): Promise<Category[]> =>
     return normalizeCategories(categories as Category[]);
   });
 
-export const addCategory = async (name: string): Promise<Category> =>
+export const addCategory = async (name: string, subcategoryId?: string | null): Promise<Category> =>
   runTransaction(['categories'], 'readwrite', async tx => {
     const store = tx.objectStore('categories');
     const categories = normalizeCategories((await requestAsPromise(store.getAll())) as Category[]);
     const trimmedName = name.trim();
 
     if (!trimmedName) {
-      throw new Error('Category name is required.');
+      throw new Error('Item name is required.');
     }
 
     if (categories.some(category => category.name.toLowerCase() === trimmedName.toLowerCase())) {
-      throw new Error('A category with this name already exists.');
+      throw new Error('An item with this name already exists.');
     }
+
+    const targetSubcategoryId = subcategoryId || null;
+    const maxOrder = categories
+      .filter(category => (category.subcategoryId ?? null) === targetSubcategoryId)
+      .reduce((max, category) => Math.max(max, category.sortOrder), -1);
 
     const nextCategory: Category = {
       id: createId(),
       name: trimmedName,
+      subcategoryId: targetSubcategoryId,
       isDefault: false,
       isArchived: false,
-      sortOrder: categories.length
+      sortOrder: maxOrder + 1
     };
 
     store.put(nextCategory);
     return nextCategory;
   });
+
+export const ensureDefaultSubcategoryAssignments = async (): Promise<void> => {
+  await runTransaction(['categories', 'subcategories'], 'readwrite', async tx => {
+    const categoryStore = tx.objectStore('categories');
+    const subcategoryStore = tx.objectStore('subcategories');
+    const categories = normalizeCategories((await requestAsPromise(categoryStore.getAll())) as Category[]);
+    const subcategories = normalizeSubcategories((await requestAsPromise(subcategoryStore.getAll())) as Subcategory[]);
+    const subcategoryByName = new Map(subcategories.map(subcategory => [subcategory.name.toLowerCase(), subcategory.id] as const));
+    const categoryMapping = new Map(
+      Object.entries(DEFAULT_CATEGORY_SUBCATEGORY_MAP).map(([name, subcategory]) => [name.toLowerCase(), subcategory])
+    );
+
+    categories.forEach(category => {
+      if (category.subcategoryId) {
+        return;
+      }
+
+      const mapped = categoryMapping.get(category.name.trim().toLowerCase());
+      if (!mapped) {
+        return;
+      }
+
+      const subcategoryId = subcategoryByName.get(mapped.toLowerCase());
+      if (!subcategoryId) {
+        return;
+      }
+
+      categoryStore.put({ ...category, subcategoryId });
+    });
+  });
+};
 
 export const reorderCategories = async (orderedCategoryIds: string[]): Promise<void> => {
   await runTransaction(['categories'], 'readwrite', async tx => {
@@ -204,13 +339,22 @@ export const reorderCategories = async (orderedCategoryIds: string[]): Promise<v
   });
 };
 
+export const saveCategories = async (nextCategories: Category[]): Promise<void> => {
+  await runTransaction(['categories'], 'readwrite', async tx => {
+    const store = tx.objectStore('categories');
+    nextCategories.forEach(category => {
+      store.put(category);
+    });
+  });
+};
+
 export const archiveCategory = async (categoryId: string): Promise<void> => {
   await runTransaction(['categories'], 'readwrite', async tx => {
     const store = tx.objectStore('categories');
     const category = (await requestAsPromise(store.get(categoryId))) as Category | undefined;
 
     if (!category) {
-      throw new Error('Category not found.');
+      throw new Error('Item not found.');
     }
 
     store.put({ ...category, isArchived: true });
