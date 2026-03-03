@@ -1,19 +1,24 @@
-import { DragEvent as ReactDragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { DragEvent as ReactDragEvent, FormEvent, Fragment, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addCategory,
+  addSubcategory,
   archiveCategory,
   autoCopyBudgetsFromPreviousMonth,
   Category,
   Expense,
+  Subcategory,
   addExpense,
   deleteExpense,
+  ensureDefaultSubcategoryAssignments,
   getBudgetsByMonth,
   getCategories,
+  getSubcategories,
   getExpensesByMonth,
   getLastUsedCategory,
   getRecentMerchants,
-  reorderCategories,
+  saveCategories,
   seedDefaultCategories,
+  seedDefaultSubcategories,
   setLastUsedCategory,
   updateExpense,
   upsertBudget
@@ -30,7 +35,9 @@ type ExpenseFormState = {
 
 type TransactionSort = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc' | 'merchant-asc';
 type CategoryDropPlacement = 'before' | 'after';
-type BudgetSort = 'alpha-asc' | 'alpha-desc' | 'budget-desc' | 'spent-desc' | 'remaining-desc';
+type BudgetSort = 'custom' | 'alpha-asc' | 'alpha-desc' | 'budget-desc' | 'spent-desc' | 'remaining-desc';
+
+const DEFAULT_SUBCATEGORY_ORDER = ['Bills', 'Savings', 'Debts', 'Subscriptions', 'Variable Spending'];
 
 const today = new Date();
 const monthString = (date: Date): string => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -52,11 +59,15 @@ const parseCurrencyInputToCents = (value: string): number | null => {
 export default function ExpenseTrackerPage() {
   const [selectedMonth, setSelectedMonth] = useState(monthString(today));
   const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [merchantSuggestions, setMerchantSuggestions] = useState<string[]>([]);
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [budgetInputs, setBudgetInputs] = useState<Record<string, string>>({});
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategorySubcategoryId, setNewCategorySubcategoryId] = useState('');
+  const [newSubcategoryName, setNewSubcategoryName] = useState('');
+  const [showNoSubcategoryWarning, setShowNoSubcategoryWarning] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilterId, setCategoryFilterId] = useState('');
   const [minAmountFilter, setMinAmountFilter] = useState('');
@@ -71,6 +82,7 @@ export default function ExpenseTrackerPage() {
   const [isTransactionsCollapsed, setIsTransactionsCollapsed] = useState(false);
   const [isBudgetsCollapsed, setIsBudgetsCollapsed] = useState(false);
   const [isCategoryManagerCollapsed, setIsCategoryManagerCollapsed] = useState(false);
+  const [collapsedBudgetGroups, setCollapsedBudgetGroups] = useState<Record<string, boolean>>({});
   const [budgetSaveStatus, setBudgetSaveStatus] = useState<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({});
   const [form, setForm] = useState<ExpenseFormState>({
     amount: '',
@@ -82,8 +94,9 @@ export default function ExpenseTrackerPage() {
   });
 
   const formFieldRefs = useRef<Array<HTMLElement | null>>([]);
-  const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null);
-  const [dragOverCategory, setDragOverCategory] = useState<{ id: string; placement: CategoryDropPlacement } | null>(null);
+  const [draggingBudgetItemId, setDraggingBudgetItemId] = useState<string | null>(null);
+  const [dragOverBudgetItem, setDragOverBudgetItem] = useState<{ id: string; placement: CategoryDropPlacement } | null>(null);
+  const [dragOverSubcategoryId, setDragOverSubcategoryId] = useState<string | null | undefined>(undefined);
   const budgetStatusTimeouts = useRef<Record<string, number>>({});
 
   const activeCategories = useMemo(
@@ -100,8 +113,9 @@ export default function ExpenseTrackerPage() {
 
   const loadData = async (month: string) => {
     const copiedBudgets = await autoCopyBudgetsFromPreviousMonth(month);
-    const [nextCategories, monthExpenses, monthBudgets, recentMerchants] = await Promise.all([
+    const [nextCategories, nextSubcategories, monthExpenses, monthBudgets, recentMerchants] = await Promise.all([
       getCategories(),
+      getSubcategories(),
       getExpensesByMonth(month),
       getBudgetsByMonth(month),
       getRecentMerchants(10)
@@ -113,6 +127,7 @@ export default function ExpenseTrackerPage() {
     }, {});
 
     setCategories(nextCategories);
+    setSubcategories(nextSubcategories);
     setExpenses(monthExpenses);
     setMerchantSuggestions(recentMerchants);
     setBudgets(budgetMap);
@@ -145,7 +160,9 @@ export default function ExpenseTrackerPage() {
 
   useEffect(() => {
     const init = async () => {
+      await seedDefaultSubcategories();
       await seedDefaultCategories();
+      await ensureDefaultSubcategoryAssignments();
       setInitialized(true);
     };
 
@@ -211,34 +228,127 @@ export default function ExpenseTrackerPage() {
     }, {});
   }, [expenses]);
 
-  const sortedBudgets = useMemo(() => {
-    const sorted = [...activeCategories];
-    sorted.sort((a, b) => {
-      if (budgetSort === 'alpha-asc') {
-        return a.name.localeCompare(b.name);
-      }
-      if (budgetSort === 'alpha-desc') {
-        return b.name.localeCompare(a.name);
+  const orderedSubcategories = useMemo(() => {
+    const defaultSubcategories = DEFAULT_SUBCATEGORY_ORDER
+      .map(name => subcategories.find(subcategory => subcategory.name === name))
+      .filter((subcategory): subcategory is Subcategory => Boolean(subcategory));
+    const defaultIds = new Set(defaultSubcategories.map(subcategory => subcategory.id));
+    const customSubcategories = subcategories
+      .filter(subcategory => !defaultIds.has(subcategory.id))
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+
+    return [...defaultSubcategories, ...customSubcategories];
+  }, [subcategories]);
+
+  const groupedBudgetItems = useMemo(() => {
+    const sortItems = (items: Category[]) => {
+      const sorted = [...items];
+
+      if (budgetSort === 'custom') {
+        sorted.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+        return sorted;
       }
 
-      const aBudget = budgets[a.id] ?? 0;
-      const bBudget = budgets[b.id] ?? 0;
-      const aSpent = spentByCategory[a.id] ?? 0;
-      const bSpent = spentByCategory[b.id] ?? 0;
-      const aRemaining = aBudget - aSpent;
-      const bRemaining = bBudget - bSpent;
+      sorted.sort((a, b) => {
+        if (budgetSort === 'alpha-asc') {
+          return a.name.localeCompare(b.name);
+        }
+        if (budgetSort === 'alpha-desc') {
+          return b.name.localeCompare(a.name);
+        }
 
-      if (budgetSort === 'budget-desc') {
-        return bBudget - aBudget || a.name.localeCompare(b.name);
-      }
-      if (budgetSort === 'spent-desc') {
-        return bSpent - aSpent || a.name.localeCompare(b.name);
-      }
-      return bRemaining - aRemaining || a.name.localeCompare(b.name);
+        const aBudget = budgets[a.id] ?? 0;
+        const bBudget = budgets[b.id] ?? 0;
+        const aSpent = spentByCategory[a.id] ?? 0;
+        const bSpent = spentByCategory[b.id] ?? 0;
+        const aRemaining = aBudget - aSpent;
+        const bRemaining = bBudget - bSpent;
+
+        if (budgetSort === 'budget-desc') {
+          return bBudget - aBudget || a.name.localeCompare(b.name);
+        }
+        if (budgetSort === 'spent-desc') {
+          return bSpent - aSpent || a.name.localeCompare(b.name);
+        }
+        return bRemaining - aRemaining || a.name.localeCompare(b.name);
+      });
+
+      return sorted;
+    };
+
+    const groups: Array<{
+      id: string | null;
+      name: string;
+      items: Category[];
+      isUncategorized: boolean;
+      totals: { budget: number; spent: number; remaining: number };
+    }> = [];
+    const groupMap = new Map<string | null, Category[]>();
+    orderedSubcategories.forEach(subcategory => {
+      const bucket: Category[] = [];
+      groupMap.set(subcategory.id, bucket);
+      groups.push({
+        id: subcategory.id,
+        name: subcategory.name,
+        items: bucket,
+        isUncategorized: false,
+        totals: { budget: 0, spent: 0, remaining: 0 }
+      });
     });
 
-    return sorted;
-  }, [activeCategories, budgetSort, budgets, spentByCategory]);
+    const uncategorized: Category[] = [];
+    groupMap.set(null, uncategorized);
+
+    activeCategories.forEach(category => {
+      const key = category.subcategoryId ?? null;
+      const bucket = groupMap.get(key);
+      if (bucket) {
+        bucket.push(category);
+      } else {
+        uncategorized.push(category);
+      }
+    });
+
+    groups.forEach(group => {
+      group.items = sortItems(group.items);
+      const totals = group.items.reduce(
+        (acc, item) => {
+          const budget = budgets[item.id] ?? 0;
+          const spent = spentByCategory[item.id] ?? 0;
+          acc.budget += budget;
+          acc.spent += spent;
+          acc.remaining += budget - spent;
+          return acc;
+        },
+        { budget: 0, spent: 0, remaining: 0 }
+      );
+      group.totals = totals;
+    });
+
+    const uncategorizedTotals = uncategorized.reduce(
+      (acc, item) => {
+        const budget = budgets[item.id] ?? 0;
+        const spent = spentByCategory[item.id] ?? 0;
+        acc.budget += budget;
+        acc.spent += spent;
+        acc.remaining += budget - spent;
+        return acc;
+      },
+      { budget: 0, spent: 0, remaining: 0 }
+    );
+
+    groups.push({
+      id: null,
+      name: 'Uncategorized',
+      items: sortItems(uncategorized),
+      isUncategorized: true,
+      totals: uncategorizedTotals
+    });
+
+    return groups;
+  }, [activeCategories, budgetSort, budgets, orderedSubcategories, spentByCategory]);
+
+  const getBudgetGroupKey = (groupId: string | null) => groupId ?? 'uncategorized';
 
   const sortedManagerCategories = useMemo(() => {
     return [...activeCategories].sort((a, b) => a.name.localeCompare(b.name));
@@ -384,41 +494,124 @@ export default function ExpenseTrackerPage() {
     setError(null);
   };
 
-  const moveCategoryByDrag = async (targetCategoryId: string, placement: CategoryDropPlacement) => {
+  const moveBudgetItemByDrag = async (targetCategoryId: string, placement: CategoryDropPlacement) => {
     try {
-      if (!draggingCategoryId || draggingCategoryId === targetCategoryId) {
+      if (budgetSort !== 'custom' || !draggingBudgetItemId || draggingBudgetItemId === targetCategoryId) {
         return;
       }
 
-      const orderedWithoutDragged = activeCategoryIds.filter(categoryId => categoryId !== draggingCategoryId);
-      const targetIndex = orderedWithoutDragged.indexOf(targetCategoryId);
+      const dragged = activeCategories.find(category => category.id === draggingBudgetItemId);
+      const target = activeCategories.find(category => category.id === targetCategoryId);
+      if (!dragged || !target) {
+        return;
+      }
+
+      const sourceKey = dragged.subcategoryId ?? null;
+      const targetKey = target.subcategoryId ?? null;
+      const groupMap = new Map<string | null, Category[]>();
+
+      activeCategories.forEach(category => {
+        const key = category.subcategoryId ?? null;
+        const bucket = groupMap.get(key);
+        if (bucket) {
+          bucket.push(category);
+        } else {
+          groupMap.set(key, [category]);
+        }
+      });
+
+      const sourceGroup = groupMap.get(sourceKey) ?? [];
+      const targetGroup = sourceKey === targetKey ? sourceGroup : groupMap.get(targetKey) ?? [];
+      const filteredTarget = targetGroup.filter(item => item.id !== dragged.id);
+      const targetIndex = filteredTarget.findIndex(item => item.id === target.id);
       if (targetIndex < 0) {
         return;
       }
 
       const insertionIndex = placement === 'after' ? targetIndex + 1 : targetIndex;
-      const nextOrder = [...orderedWithoutDragged];
-      nextOrder.splice(insertionIndex, 0, draggingCategoryId);
-      await reorderCategories(nextOrder);
+      const nextTargetGroup = [...filteredTarget];
+      nextTargetGroup.splice(insertionIndex, 0, { ...dragged, subcategoryId: targetKey });
+
+      const nextSourceGroup = sourceKey === targetKey ? nextTargetGroup : sourceGroup.filter(item => item.id !== dragged.id);
+      const updates = new Map<string, Category>();
+
+      nextTargetGroup.forEach((item, index) => {
+        updates.set(item.id, { ...item, subcategoryId: targetKey, sortOrder: index });
+      });
+
+      if (sourceKey !== targetKey) {
+        nextSourceGroup.forEach((item, index) => {
+          updates.set(item.id, { ...item, subcategoryId: sourceKey, sortOrder: index });
+        });
+      }
+
+      const nextCategories = categories.map(category => updates.get(category.id) ?? category);
+      await saveCategories(nextCategories);
       await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Unable to reorder categories.');
+      setError(caughtError instanceof Error ? caughtError.message : 'Unable to reorder budget items.');
     } finally {
-      setDraggingCategoryId(null);
-      setDragOverCategory(null);
+      setDraggingBudgetItemId(null);
+      setDragOverBudgetItem(null);
+      setDragOverSubcategoryId(undefined);
     }
   };
 
-  const handleCategoryDragStart = (event: ReactDragEvent<HTMLDivElement>, categoryId: string) => {
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', categoryId);
-    setDraggingCategoryId(categoryId);
-    setDragOverCategory(null);
+  const moveBudgetItemToSubcategory = async (targetSubcategoryId: string | null) => {
+    try {
+      if (budgetSort !== 'custom' || !draggingBudgetItemId) {
+        return;
+      }
+
+      const dragged = activeCategories.find(category => category.id === draggingBudgetItemId);
+      if (!dragged) {
+        return;
+      }
+
+      const sourceKey = dragged.subcategoryId ?? null;
+      const targetKey = targetSubcategoryId ?? null;
+      const sourceGroup = activeCategories.filter(category => (category.subcategoryId ?? null) === sourceKey && category.id !== dragged.id);
+      const targetGroup = activeCategories.filter(category => (category.subcategoryId ?? null) === targetKey && category.id !== dragged.id);
+      const nextTargetGroup = [...targetGroup, { ...dragged, subcategoryId: targetKey }];
+      const updates = new Map<string, Category>();
+
+      nextTargetGroup.forEach((item, index) => {
+        updates.set(item.id, { ...item, subcategoryId: targetKey, sortOrder: index });
+      });
+
+      if (sourceKey !== targetKey) {
+        sourceGroup.forEach((item, index) => {
+          updates.set(item.id, { ...item, subcategoryId: sourceKey, sortOrder: index });
+        });
+      }
+
+      const nextCategories = categories.map(category => updates.get(category.id) ?? category);
+      await saveCategories(nextCategories);
+      await loadData(selectedMonth);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Unable to move budget items.');
+    } finally {
+      setDraggingBudgetItemId(null);
+      setDragOverBudgetItem(null);
+      setDragOverSubcategoryId(undefined);
+    }
   };
 
-  const handleCategoryDragOver = (event: ReactDragEvent<HTMLDivElement>, categoryId: string) => {
-    if (!draggingCategoryId || draggingCategoryId === categoryId) {
+  const handleBudgetItemDragStart = (event: ReactDragEvent<HTMLDivElement>, categoryId: string) => {
+    if (budgetSort !== 'custom') {
+      return;
+    }
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', categoryId);
+    setDraggingBudgetItemId(categoryId);
+    setDragOverBudgetItem(null);
+    setDragOverSubcategoryId(undefined);
+  };
+
+  const handleBudgetItemDragOver = (event: ReactDragEvent<HTMLDivElement>, categoryId: string) => {
+    if (budgetSort !== 'custom' || !draggingBudgetItemId || draggingBudgetItemId === categoryId) {
       return;
     }
 
@@ -427,35 +620,99 @@ export default function ExpenseTrackerPage() {
     const rect = event.currentTarget.getBoundingClientRect();
     const placement: CategoryDropPlacement = event.clientY >= rect.top + rect.height / 2 ? 'after' : 'before';
 
-    setDragOverCategory(current => {
+    setDragOverBudgetItem(current => {
       if (current?.id === categoryId && current.placement === placement) {
         return current;
       }
 
       return { id: categoryId, placement };
     });
+    setDragOverSubcategoryId(undefined);
   };
 
-  const handleCategoryDrop = async (event: ReactDragEvent<HTMLDivElement>, categoryId: string) => {
+  const handleBudgetItemDrop = async (event: ReactDragEvent<HTMLDivElement>, categoryId: string) => {
+    if (budgetSort !== 'custom') {
+      return;
+    }
     event.preventDefault();
-    const placement = dragOverCategory?.id === categoryId ? dragOverCategory.placement : 'before';
-    await moveCategoryByDrag(categoryId, placement);
+    const placement = dragOverBudgetItem?.id === categoryId ? dragOverBudgetItem.placement : 'before';
+    await moveBudgetItemByDrag(categoryId, placement);
   };
 
-  const handleCategoryDragEnd = () => {
-    setDraggingCategoryId(null);
-    setDragOverCategory(null);
+  const handleBudgetGroupDragOver = (event: ReactDragEvent<HTMLDivElement>, subcategoryId: string | null) => {
+    if (budgetSort !== 'custom' || !draggingBudgetItemId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDragOverSubcategoryId(subcategoryId);
+    setDragOverBudgetItem(null);
+  };
+
+  const handleBudgetGroupDrop = async (event: ReactDragEvent<HTMLDivElement>, subcategoryId: string | null) => {
+    if (budgetSort !== 'custom') {
+      return;
+    }
+    event.preventDefault();
+    await moveBudgetItemToSubcategory(subcategoryId);
+  };
+
+  const handleBudgetDragEnd = () => {
+    setDraggingBudgetItemId(null);
+    setDragOverBudgetItem(null);
+    setDragOverSubcategoryId(undefined);
+  };
+
+  const submitNewCategory = async (subcategoryId: string | null) => {
+    await addCategory(newCategoryName, subcategoryId);
+    setNewCategoryName('');
+    setNewCategorySubcategoryId('');
+    setShowNoSubcategoryWarning(false);
+    await loadData(selectedMonth);
   };
 
   const handleAddCategory = async (event: FormEvent) => {
     event.preventDefault();
+
+    if (!newCategoryName.trim()) {
+      setError('Item name is required.');
+      return;
+    }
+
+    if (!newCategorySubcategoryId) {
+      setShowNoSubcategoryWarning(true);
+      setError(null);
+      return;
+    }
+
     try {
-      await addCategory(newCategoryName);
-      setNewCategoryName('');
+      await submitNewCategory(newCategorySubcategoryId);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Unable to add item.');
+    }
+  };
+
+  const handleAddWithoutSubcategory = async () => {
+    try {
+      await submitNewCategory(null);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Unable to add item.');
+    }
+  };
+
+  const handleAddSubcategory = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      const created = await addSubcategory(newSubcategoryName);
+      setNewSubcategoryName('');
+      setNewCategorySubcategoryId(created.id);
       await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Unable to add category.');
+      setError(caughtError instanceof Error ? caughtError.message : 'Unable to add subcategory.');
     }
   };
 
@@ -465,7 +722,7 @@ export default function ExpenseTrackerPage() {
       await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Unable to archive category.');
+      setError(caughtError instanceof Error ? caughtError.message : 'Unable to archive item.');
     }
   };
 
@@ -860,7 +1117,7 @@ export default function ExpenseTrackerPage() {
               onClick={() => setIsBudgetsCollapsed(prev => !prev)}
               aria-expanded={!isBudgetsCollapsed}
             >
-              <h2 className="text-xl font-semibold">Category budgets</h2>
+              <h2 className="text-xl font-semibold">Budget items</h2>
               <span className="text-xs text-slate-400">{isBudgetsCollapsed ? 'Expand' : 'Collapse'}</span>
             </button>
             {!isBudgetsCollapsed && (
@@ -871,6 +1128,7 @@ export default function ExpenseTrackerPage() {
                   value={budgetSort}
                   onChange={event => setBudgetSort(event.target.value as BudgetSort)}
                 >
+                  <option value="custom">Custom order</option>
                   <option value="alpha-asc">A → Z</option>
                   <option value="alpha-desc">Z → A</option>
                   <option value="budget-desc">Highest budget</option>
@@ -883,67 +1141,137 @@ export default function ExpenseTrackerPage() {
           {!isBudgetsCollapsed && (
             <div className="rounded border border-slate-800">
               <div className="hidden items-center gap-x-3 border-b border-slate-800 px-3 py-2 text-xs uppercase tracking-wide text-slate-400 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)]">
-                <div>Category</div>
+                <div>Item</div>
                 <div className="justify-self-end text-right">Budget</div>
                 <div className="justify-self-end text-right">Spent</div>
                 <div className="justify-self-end text-right">Remaining</div>
                 <div className="justify-self-end text-right">Status</div>
               </div>
               <div className="divide-y divide-slate-800">
-                {sortedBudgets.map(category => {
-                  const spent = spentByCategory[category.id] ?? 0;
-                  const budget = budgets[category.id] ?? 0;
-                  const delta = budget - spent;
-                  const status = budgetSaveStatus[category.id] ?? 'idle';
-                  const statusLabel = status === 'saving'
-                    ? 'Saving...'
-                    : status === 'saved'
-                      ? 'Saved'
-                      : status === 'error'
-                        ? 'Error'
-                        : '';
+                {groupedBudgetItems.map(group => {
+                  const groupKey = getBudgetGroupKey(group.id);
+                  const isCollapsed = collapsedBudgetGroups[groupKey] ?? false;
 
                   return (
-                    <div
-                      key={category.id}
-                      className="grid grid-cols-2 gap-x-3 gap-y-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)]"
-                    >
-                      <div className="order-1 font-medium sm:order-none">{category.name}</div>
-                      <div className="order-4 justify-self-stretch sm:order-none">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          inputMode="decimal"
-                          className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm tabular-nums"
-                          value={budgetInputs[category.id] ?? ''}
-                          onChange={e => setBudgetInputs(prev => ({ ...prev, [category.id]: e.target.value }))}
-                          onBlur={() => void handleBudgetAutoSave(category.id)}
-                          onKeyDown={event => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              event.currentTarget.blur();
-                            }
-                          }}
-                          aria-label={`Budget for ${category.name}`}
-                        />
-                      </div>
-                      <div className="order-3 justify-self-end text-right tabular-nums text-slate-300 sm:order-none">{formatCurrency(spent)}</div>
+                    <Fragment key={`budget-group-${group.id ?? 'uncategorized'}`}>
                       <div
-                        className={`order-2 justify-self-end text-right font-semibold tabular-nums sm:order-none ${
-                          delta >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                        className={`px-3 py-2 text-xs uppercase tracking-wide ${
+                          dragOverSubcategoryId === group.id ? 'bg-slate-800/60 text-slate-200' : 'bg-slate-950/40 text-slate-400'
                         }`}
+                        onDragOver={event => handleBudgetGroupDragOver(event, group.id)}
+                        onDrop={event => handleBudgetGroupDrop(event, group.id)}
                       >
-                        {formatCurrency(delta)}
+                        <div className="flex items-center justify-between">
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 text-left font-semibold uppercase tracking-wide"
+                            onClick={() => setCollapsedBudgetGroups(prev => ({ ...prev, [groupKey]: !isCollapsed }))}
+                          >
+                            {group.name}
+                            <span className="text-[10px] text-slate-500">{isCollapsed ? 'Expand' : 'Collapse'}</span>
+                          </button>
+                          {budgetSort === 'custom' && !isCollapsed && (
+                            <span className="text-[10px] text-slate-500">Drag items here to move</span>
+                          )}
+                        </div>
                       </div>
-                      <div
-                        className={`order-5 col-span-2 justify-self-end text-right text-xs sm:col-span-1 sm:order-none ${
-                          status === 'error' ? 'text-rose-300' : status === 'saved' ? 'text-emerald-300' : 'text-slate-400'
-                        }`}
-                      >
-                        {statusLabel}
+                      {!isCollapsed && (group.items.length === 0 ? (
+                        <div
+                          className={`px-3 py-2 text-sm text-slate-500 ${
+                            dragOverSubcategoryId === group.id ? 'bg-slate-800/40' : ''
+                          }`}
+                          onDragOver={event => handleBudgetGroupDragOver(event, group.id)}
+                          onDrop={event => handleBudgetGroupDrop(event, group.id)}
+                        >
+                          No items yet.
+                        </div>
+                      ) : (
+                        group.items.map(category => {
+                          const spent = spentByCategory[category.id] ?? 0;
+                          const budget = budgets[category.id] ?? 0;
+                          const delta = budget - spent;
+                          const status = budgetSaveStatus[category.id] ?? 'idle';
+                          const statusLabel = status === 'saving'
+                            ? 'Saving...'
+                            : status === 'saved'
+                              ? 'Saved'
+                              : status === 'error'
+                                ? 'Error'
+                                : '';
+                          const isDragging = draggingBudgetItemId === category.id;
+                          const dragIndicator = dragOverBudgetItem?.id === category.id
+                            ? dragOverBudgetItem.placement === 'before'
+                              ? 'border-t-2 border-brand-500'
+                              : 'border-b-2 border-brand-500'
+                            : '';
+
+                          return (
+                            <div
+                              key={category.id}
+                              className={`grid grid-cols-2 gap-x-3 gap-y-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)] ${
+                                budgetSort === 'custom' ? 'cursor-move' : ''
+                              } ${isDragging ? 'opacity-60' : ''} ${dragIndicator}`}
+                              draggable={budgetSort === 'custom'}
+                              onDragStart={event => handleBudgetItemDragStart(event, category.id)}
+                              onDragOver={event => handleBudgetItemDragOver(event, category.id)}
+                              onDrop={event => handleBudgetItemDrop(event, category.id)}
+                              onDragEnd={handleBudgetDragEnd}
+                            >
+                              <div className="order-1 font-medium sm:order-none">{category.name}</div>
+                              <div className="order-4 justify-self-stretch sm:order-none">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  inputMode="decimal"
+                                  className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm tabular-nums"
+                                  value={budgetInputs[category.id] ?? ''}
+                                  onChange={e => setBudgetInputs(prev => ({ ...prev, [category.id]: e.target.value }))}
+                                  onBlur={() => void handleBudgetAutoSave(category.id)}
+                                  onKeyDown={event => {
+                                    if (event.key === 'Enter') {
+                                      event.preventDefault();
+                                      event.currentTarget.blur();
+                                    }
+                                  }}
+                                  aria-label={`Budget for ${category.name}`}
+                                />
+                              </div>
+                              <div className="order-3 justify-self-end text-right tabular-nums text-slate-300 sm:order-none">{formatCurrency(spent)}</div>
+                              <div
+                                className={`order-2 justify-self-end text-right font-semibold tabular-nums sm:order-none ${
+                                  delta >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                                }`}
+                              >
+                                {formatCurrency(delta)}
+                              </div>
+                              <div
+                                className={`order-5 col-span-2 justify-self-end text-right text-xs sm:col-span-1 sm:order-none ${
+                                  status === 'error' ? 'text-rose-300' : status === 'saved' ? 'text-emerald-300' : 'text-slate-400'
+                                }`}
+                              >
+                                {statusLabel}
+                              </div>
+                            </div>
+                          );
+                        })
+                      ))}
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/60 px-3 py-2 text-xs sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)]">
+                        <div className="order-1 font-semibold text-slate-300 sm:order-none">Subtotal</div>
+                        <div className="order-4 justify-self-end text-right font-semibold tabular-nums text-slate-300 sm:order-none">
+                          {formatCurrency(group.totals.budget)}
+                        </div>
+                        <div className="order-3 justify-self-end text-right font-semibold tabular-nums text-slate-300 sm:order-none">
+                          {formatCurrency(group.totals.spent)}
+                        </div>
+                        <div className="order-2 justify-self-end text-right font-semibold tabular-nums text-slate-300 sm:order-none">
+                          {formatCurrency(group.totals.remaining)}
+                        </div>
+                        <div className="order-5 col-span-2 justify-self-end text-right text-xs text-slate-500 sm:col-span-1 sm:order-none">
+                          {group.name}
+                        </div>
                       </div>
-                    </div>
+                    </Fragment>
                   );
                 })}
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/40 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)]">
@@ -981,19 +1309,62 @@ export default function ExpenseTrackerPage() {
             onClick={() => setIsCategoryManagerCollapsed(prev => !prev)}
             aria-expanded={!isCategoryManagerCollapsed}
           >
-            <h2 className="text-xl font-semibold">Category manager</h2>
+            <h2 className="text-xl font-semibold">Budget items manager</h2>
             <span className="text-xs text-slate-400">{isCategoryManagerCollapsed ? 'Expand' : 'Collapse'}</span>
           </button>
           {!isCategoryManagerCollapsed && (
             <>
-              <form className="mb-4 flex flex-wrap gap-2" onSubmit={handleAddCategory}>
+              <form className="mb-3 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" onSubmit={handleAddCategory}>
+                <label className="flex flex-col gap-1 text-sm sm:col-span-2">Item name
+                  <input
+                    className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                    placeholder="Add item name"
+                    value={newCategoryName}
+                    onChange={event => setNewCategoryName(event.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">Subcategory
+                  <select
+                    className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                    value={newCategorySubcategoryId}
+                    onChange={event => {
+                      setNewCategorySubcategoryId(event.target.value);
+                      setShowNoSubcategoryWarning(false);
+                    }}
+                  >
+                    <option value="">No subcategory</option>
+                    {subcategories.map(subcategory => (
+                      <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <button className="rounded border border-slate-700 px-3 py-2 text-sm sm:self-end" type="submit">
+                  Add item
+                </button>
+              </form>
+
+              {showNoSubcategoryWarning && (
+                <div className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+                  <p className="font-medium">No subcategory selected. Add item without one?</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button className="rounded bg-amber-500/20 px-3 py-1 text-xs text-amber-100" type="button" onClick={handleAddWithoutSubcategory}>
+                      Add anyway
+                    </button>
+                    <button className="rounded border border-amber-500/40 px-3 py-1 text-xs" type="button" onClick={() => setShowNoSubcategoryWarning(false)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <form className="mb-4 flex flex-wrap gap-2" onSubmit={handleAddSubcategory}>
                 <input
                   className="min-w-60 flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-                  placeholder="Add category name"
-                  value={newCategoryName}
-                  onChange={event => setNewCategoryName(event.target.value)}
+                  placeholder="New subcategory name"
+                  value={newSubcategoryName}
+                  onChange={event => setNewSubcategoryName(event.target.value)}
                 />
-                <button className="rounded border border-slate-700 px-3 py-2 text-sm" type="submit">Add category</button>
+                <button className="rounded border border-slate-700 px-3 py-2 text-sm" type="submit">Add subcategory</button>
               </form>
 
               <div className="space-y-2">
@@ -1016,7 +1387,7 @@ export default function ExpenseTrackerPage() {
               </div>
 
               <div className="mt-4 text-sm text-slate-400">
-                <p className="font-medium text-slate-300">Archived categories</p>
+                <p className="font-medium text-slate-300">Archived items</p>
                 {categories.filter(category => category.isArchived).length === 0 ? (
                   <p>None</p>
                 ) : (
