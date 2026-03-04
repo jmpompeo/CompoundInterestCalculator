@@ -214,7 +214,7 @@ export const addSubcategory = async (name: string): Promise<Subcategory> =>
   });
 
 export const seedDefaultCategories = async (): Promise<void> => {
-  await runTransaction(['categories'], 'readwrite', async tx => {
+  await runTransaction(['categories', 'subcategories'], 'readwrite', async tx => {
     const store = tx.objectStore('categories');
     const existing = await requestAsPromise(store.getAll());
 

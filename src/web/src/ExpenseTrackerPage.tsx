@@ -863,8 +863,8 @@ export default function ExpenseTrackerPage() {
         </header>
 
         <section className="rounded-2xl bg-slate-900 p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
               <button className="rounded border border-slate-700 px-3 py-1" onClick={() => changeMonth(-1)}>
                 Prev
               </button>
@@ -873,7 +873,7 @@ export default function ExpenseTrackerPage() {
                 Next
               </button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
               <button className="rounded border border-slate-700 px-4 py-2 text-sm" onClick={handleDuplicateLastExpense} disabled={!latestExpense}>
                 Duplicate last
               </button>
