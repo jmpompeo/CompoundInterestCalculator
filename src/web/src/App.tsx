@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import CalculatorPage from './CalculatorPage';
 import ExpenseTrackerPage from './ExpenseTrackerPage';
+import DebtLogPage from './DebtLogPage';
 
-type AppPage = 'calculator' | 'budget';
+type AppPage = 'calculator' | 'budget' | 'debt-log';
 
 export default function App() {
   const [page, setPage] = useState<AppPage>('calculator');
@@ -33,10 +34,21 @@ export default function App() {
           >
             Budget tracker
           </button>
+          <button
+            type="button"
+            onClick={() => setPage('debt-log')}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+              page === 'debt-log'
+                ? 'bg-brand-500/20 text-brand-100 ring-1 ring-brand-400/50'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            Debt log
+          </button>
         </div>
       </nav>
 
-      {page === 'calculator' ? <CalculatorPage /> : <ExpenseTrackerPage />}
+      {page === 'calculator' ? <CalculatorPage /> : page === 'budget' ? <ExpenseTrackerPage /> : <DebtLogPage />}
     </div>
   );
 }
