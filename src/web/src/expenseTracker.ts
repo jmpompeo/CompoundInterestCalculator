@@ -361,6 +361,19 @@ export const archiveCategory = async (categoryId: string): Promise<void> => {
   });
 };
 
+export const unarchiveCategory = async (categoryId: string): Promise<void> => {
+  await runTransaction(['categories'], 'readwrite', async tx => {
+    const store = tx.objectStore('categories');
+    const category = (await requestAsPromise(store.get(categoryId))) as Category | undefined;
+
+    if (!category) {
+      throw new Error('Item not found.');
+    }
+
+    store.put({ ...category, isArchived: false });
+  });
+};
+
 export const getExpensesByMonth = async (month: string): Promise<Expense[]> => {
   const [year, monthPart] = month.split('-').map(Number);
   const start = `${year}-${String(monthPart).padStart(2, '0')}-01`;
