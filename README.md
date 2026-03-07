@@ -1,31 +1,38 @@
 # Compound Interest Calculator
 
-This project turns a legacy Azure Function into a full ASP.NET Core web experience for calculating
-compound interest. The API guarantees deterministic decimal math, surfaces detailed metadata for
-traceability, and ships with a lightweight React UI so people can experiment with cadences, interest
-rates, and time horizons without writing code.
+This project turns a legacy Azure Function into a full ASP.NET Core experience for financial planning
+workflows. It provides deterministic calculation APIs and a lightweight React UI so people can model
+future growth, estimate debt and mortgage scenarios, and track day-to-day budget activity in one place.
 
 ## What It Does
 
+### API calculators
+
 - `POST /api/v1/growth/contribution` projects balances for accounts that receive recurring monthly
-  deposits (think 401(k) or brokerage auto-investing) and returns the ending balance, monthly
-  contribution echo, and correlation identifiers.
+  deposits (e.g., 401(k) or brokerage auto-investing).
 - `POST /api/v1/growth/savings` models a fixed principal that compounds according to the cadence you
-  choose (e.g., HYSA or CD) so you can see how far a static balance grows with no extra deposits.
-- FluentValidation enforces business rules (principal, rates, cadence support, request metadata) and
-  emits RFC 7807 responses that include the same trace ID seen in logs.
-- Structured telemetry logs every request with a propagated `x-correlation-id`, plus dedicated events
-  for validation failures and unexpected exceptions.
-- The bundled SPA highlights the API output, echoes trace IDs, and walks users through picking a
-  compounding schedule so the backend and frontend always stay in sync.
+  choose.
+- `POST /api/v1/debt/payoff` estimates debt payoff timing and total interest under payment scenarios.
+- `POST /api/v1/mortgage/estimate` estimates monthly payment and total interest for mortgage scenarios.
+
+### Validation and observability
+
+- FluentValidation enforces request rules and returns RFC 7807 validation responses.
+- Structured telemetry propagates trace and correlation IDs through requests, logs, and responses.
+- Health checks provide readiness coverage for hosted deployments.
+
+### Web experience
+
+- **Interest calculator**: Interactive UI for growth projections powered by the API.
+- **Budget tracker**: Monthly budget planning with category-based spending views.
+- **Debt log support**: Budget categorization patterns support tracking debt-related spending/payments
+  alongside other monthly expenses.
 
 ## Tech Highlights
 
-- .NET 8 Web API with API versioning, Swagger UI, and readiness health checks for Render deployments.
-- Deterministic decimal math lives in a separate `CompoundCalc` domain assembly that can be reused in
-  other workloads or tested in isolation.
-- React 18 + Vite + Tailwind provide the UI, while a small Node script copies the build artifacts into
-  `wwwroot` so ASP.NET Core serves the same bundle in development and production.
+- .NET 8 Web API with API versioning, Swagger UI, health checks, and structured request telemetry.
+- Deterministic decimal math in a separate `CompoundCalc` domain assembly for reuse and testability.
+- React 18 + Vite + Tailwind UI, bundled into `wwwroot` so ASP.NET Core serves a single app artifact.
 
 ## Running Locally
 
@@ -38,10 +45,15 @@ rates, and time horizons without writing code.
    pnpm --dir src/web install
    pnpm --dir src/web build
    ```
-3. Run the API (serves JSON + SPA on the standard ASP.NET ports):
+3. Run the API (serves JSON + SPA on standard ASP.NET ports):
    ```bash
    dotnet run --project api/CompoundInterestCalculator.Api/CompoundInterestCalculator.Api.csproj
    ```
 
-Call the calculator with `curl`/Postman or open `http://localhost:5032` to use the UI. Execute
-`dotnet test` any time you want to run the integration and unit suites that validate the API contract.
+Call the API with `curl`/Postman or open `http://localhost:5032` to use the UI.
+
+Run tests:
+
+```bash
+dotnet test
+```
