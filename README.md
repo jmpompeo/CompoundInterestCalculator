@@ -1,47 +1,50 @@
 # Compound Interest Calculator
 
-This project turns a legacy Azure Function into a full ASP.NET Core web experience for calculating
-compound interest. The API guarantees deterministic decimal math, surfaces detailed metadata for
-traceability, and ships with a lightweight React UI so people can experiment with cadences, interest
-rates, and time horizons without writing code.
+Full-stack personal finance app with a .NET API and React SPA.
 
-## What It Does
+## Current Functionality
 
-- `POST /api/v1/growth/contribution` projects balances for accounts that receive recurring monthly
-  deposits (think 401(k) or brokerage auto-investing) and returns the ending balance, monthly
-  contribution echo, and correlation identifiers.
-- `POST /api/v1/growth/savings` models a fixed principal that compounds according to the cadence you
-  choose (e.g., HYSA or CD) so you can see how far a static balance grows with no extra deposits.
-- FluentValidation enforces business rules (principal, rates, cadence support, request metadata) and
-  emits RFC 7807 responses that include the same trace ID seen in logs.
-- Structured telemetry logs every request with a propagated `x-correlation-id`, plus dedicated events
-  for validation failures and unexpected exceptions.
-- The bundled SPA highlights the API output, echoes trace IDs, and walks users through picking a
-  compounding schedule so the backend and frontend always stay in sync.
+### API calculators
 
-## Tech Highlights
+- `POST /api/v1/growth/contribution`: compound growth with monthly contributions
+- `POST /api/v1/growth/savings`: compound growth with no recurring contributions
+- `POST /api/v1/debt/payoff`: debt payoff timeline and interest totals
+- `POST /api/v1/mortgage/estimate`: monthly payment and total-interest estimate
 
-- .NET 8 Web API with API versioning, Swagger UI, and readiness health checks for Render deployments.
-- Deterministic decimal math lives in a separate `CompoundCalc` domain assembly that can be reused in
-  other workloads or tested in isolation.
-- React 18 + Vite + Tailwind provide the UI, while a small Node script copies the build artifacts into
-  `wwwroot` so ASP.NET Core serves the same bundle in development and production.
+### Web app tabs
 
-## Running Locally
+- `Interest calculator`: UI for growth, debt payoff, and mortgage calculations
+- `Budget tracker`: local-first monthly budgeting and expense tracking
+- `Debt log`: local-first debt and payment tracking with payoff projections via `/api/v1/debt/payoff`
 
-1. Restore the API and test dependencies:
+## Tech Stack
+
+- .NET 10 ASP.NET Core Web API with versioning, Swagger, health checks, FluentValidation, and structured logging
+- `CompoundCalc` domain library for deterministic decimal math
+- React 18 + Vite + Tailwind SPA served by the API from `wwwroot`
+- IndexedDB persistence for budget and debt-log tab data
+
+## Run Locally
+
+1. Restore .NET dependencies:
    ```bash
    dotnet restore
    ```
-2. Install web dependencies and build the SPA (copied into the API's `wwwroot`):
+2. Install and build frontend assets:
    ```bash
    pnpm --dir src/web install
    pnpm --dir src/web build
    ```
-3. Run the API (serves JSON + SPA on the standard ASP.NET ports):
+3. Start the API + SPA host:
    ```bash
    dotnet run --project api/CompoundInterestCalculator.Api/CompoundInterestCalculator.Api.csproj
    ```
+4. Open:
+   - App: `http://localhost:5032`
+   - Swagger: `http://localhost:5032/swagger`
 
-Call the calculator with `curl`/Postman or open `http://localhost:5032` to use the UI. Execute
-`dotnet test` any time you want to run the integration and unit suites that validate the API contract.
+## Tests
+
+```bash
+dotnet test
+```
