@@ -6,6 +6,9 @@ import {
   autoCopyBudgetsFromPreviousMonth,
   Category,
   Expense,
+  getMonthActivitySummary,
+  MonthActivityActionType,
+  MonthActivitySummary,
   Subcategory,
   addExpense,
   deleteExpense,
@@ -19,6 +22,7 @@ import {
   saveCategories,
   seedDefaultCategories,
   seedDefaultSubcategories,
+  setMonthActivitySummary,
   setLastUsedCategory,
   updateExpense,
   upsertBudget
@@ -47,6 +51,14 @@ const formatMonthLabel = (month: string): string => {
   const [year, monthPart] = month.split('-').map(Number);
   return new Date(year, monthPart - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 };
+const formatTimestamp = (value: string): string =>
+  new Date(value).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
 const defaultDateForMonth = (month: string): string => (month === monthString(today) ? dateString(today) : `${month}-01`);
 
 const parseCurrencyInputToCents = (value: string): number | null => {
@@ -61,6 +73,7 @@ export default function ExpenseTrackerPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [monthActivity, setMonthActivity] = useState<MonthActivitySummary | null>(null);
   const [merchantSuggestions, setMerchantSuggestions] = useState<string[]>([]);
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [budgetInputs, setBudgetInputs] = useState<Record<string, string>>({});
@@ -109,16 +122,45 @@ export default function ExpenseTrackerPage() {
     [activeCategories]
   );
 
-  const latestExpense = expenses[0] ?? null;
+  const latestEnteredExpense = useMemo(() => {
+    const sorted = [...expenses].sort(
+      (a, b) => b.createdAt.localeCompare(a.createdAt) || b.updatedAt.localeCompare(a.updatedAt) || b.date.localeCompare(a.date)
+    );
+    return sorted[0] ?? null;
+  }, [expenses]);
+
+  const getCategoryName = (categoryId: string): string =>
+    categories.find(category => category.id === categoryId)?.name ?? 'Uncategorized';
+
+  const getExpenseLabel = (expense: Pick<Expense, 'merchant' | 'note'>): string =>
+    expense.merchant || expense.note || 'Expense';
+
+  const recordMonthActivity = async (
+    actionType: MonthActivityActionType,
+    title: string,
+    detail?: string
+  ): Promise<void> => {
+    const summary: MonthActivitySummary = {
+      month: selectedMonth,
+      occurredAt: new Date().toISOString(),
+      actionType,
+      title,
+      detail
+    };
+
+    await setMonthActivitySummary(summary);
+    setMonthActivity(summary);
+  };
 
   const loadData = async (month: string) => {
     const copiedBudgets = await autoCopyBudgetsFromPreviousMonth(month);
-    const [nextCategories, nextSubcategories, monthExpenses, monthBudgets, recentMerchants] = await Promise.all([
+    const [nextCategories, nextSubcategories, monthExpenses, monthBudgets, recentMerchants, nextMonthActivity] = await Promise.all([
       getCategories(),
       getSubcategories(),
       getExpensesByMonth(month),
       getBudgetsByMonth(month),
-      getRecentMerchants(10)
+      getRecentMerchants(10),
+      getMonthActivitySummary(month)
     ]);
 
     const budgetMap = monthBudgets.reduce<Record<string, number>>((acc, budget) => {
@@ -129,6 +171,7 @@ export default function ExpenseTrackerPage() {
     setCategories(nextCategories);
     setSubcategories(nextSubcategories);
     setExpenses(monthExpenses);
+    setMonthActivity(nextMonthActivity);
     setMerchantSuggestions(recentMerchants);
     setBudgets(budgetMap);
     setBudgetNotice(
@@ -191,7 +234,7 @@ export default function ExpenseTrackerPage() {
         return;
       }
 
-      if (!latestExpense) {
+      if (!latestEnteredExpense) {
         return;
       }
 
@@ -200,18 +243,18 @@ export default function ExpenseTrackerPage() {
       setShowExpenseForm(true);
       setForm(prev => ({
         ...prev,
-        amount: (latestExpense.amountCents / 100).toString(),
+        amount: (latestEnteredExpense.amountCents / 100).toString(),
         date: defaultDateForMonth(selectedMonth),
-        categoryId: activeCategoryIds.includes(latestExpense.categoryId) ? latestExpense.categoryId : activeCategories[0]?.id ?? '',
-        merchant: latestExpense.merchant ?? '',
-        note: latestExpense.note ?? ''
+        categoryId: activeCategoryIds.includes(latestEnteredExpense.categoryId) ? latestEnteredExpense.categoryId : activeCategories[0]?.id ?? '',
+        merchant: latestEnteredExpense.merchant ?? '',
+        note: latestEnteredExpense.note ?? ''
       }));
       setError(null);
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeCategories, activeCategoryIds, latestExpense, selectedMonth]);
+  }, [activeCategories, activeCategoryIds, latestEnteredExpense, selectedMonth]);
 
   useEffect(() => {
     return () => {
@@ -476,7 +519,7 @@ export default function ExpenseTrackerPage() {
   };
 
   const handleDuplicateLastExpense = () => {
-    if (!latestExpense) {
+    if (!latestEnteredExpense) {
       setError('No expenses available to duplicate.');
       return;
     }
@@ -485,11 +528,11 @@ export default function ExpenseTrackerPage() {
     setShowExpenseForm(true);
     setForm(prev => ({
       ...prev,
-      amount: (latestExpense.amountCents / 100).toString(),
+      amount: (latestEnteredExpense.amountCents / 100).toString(),
       date: defaultDateForMonth(selectedMonth),
-      categoryId: activeCategoryIds.includes(latestExpense.categoryId) ? latestExpense.categoryId : activeCategories[0]?.id ?? '',
-      merchant: latestExpense.merchant ?? '',
-      note: latestExpense.note ?? ''
+      categoryId: activeCategoryIds.includes(latestEnteredExpense.categoryId) ? latestEnteredExpense.categoryId : activeCategories[0]?.id ?? '',
+      merchant: latestEnteredExpense.merchant ?? '',
+      note: latestEnteredExpense.note ?? ''
     }));
     setError(null);
   };
@@ -547,6 +590,7 @@ export default function ExpenseTrackerPage() {
 
       const nextCategories = categories.map(category => updates.get(category.id) ?? category);
       await saveCategories(nextCategories);
+      await recordMonthActivity('budget-layout-updated', 'Updated budget layout', dragged.name);
       await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
@@ -588,6 +632,7 @@ export default function ExpenseTrackerPage() {
 
       const nextCategories = categories.map(category => updates.get(category.id) ?? category);
       await saveCategories(nextCategories);
+      await recordMonthActivity('budget-layout-updated', 'Updated budget layout', dragged.name);
       await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
@@ -665,11 +710,11 @@ export default function ExpenseTrackerPage() {
   };
 
   const submitNewCategory = async (subcategoryId: string | null) => {
-    await addCategory(newCategoryName, subcategoryId);
+    const created = await addCategory(newCategoryName, subcategoryId);
     setNewCategoryName('');
     setNewCategorySubcategoryId('');
     setShowNoSubcategoryWarning(false);
-    await loadData(selectedMonth);
+    return created;
   };
 
   const handleAddCategory = async (event: FormEvent) => {
@@ -687,7 +732,9 @@ export default function ExpenseTrackerPage() {
     }
 
     try {
-      await submitNewCategory(newCategorySubcategoryId);
+      const created = await submitNewCategory(newCategorySubcategoryId);
+      await recordMonthActivity('category-added', 'Added category', created.name);
+      await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Unable to add item.');
@@ -696,7 +743,9 @@ export default function ExpenseTrackerPage() {
 
   const handleAddWithoutSubcategory = async () => {
     try {
-      await submitNewCategory(null);
+      const created = await submitNewCategory(null);
+      await recordMonthActivity('category-added', 'Added category', created.name);
+      await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Unable to add item.');
@@ -709,6 +758,7 @@ export default function ExpenseTrackerPage() {
       const created = await addSubcategory(newSubcategoryName);
       setNewSubcategoryName('');
       setNewCategorySubcategoryId(created.id);
+      await recordMonthActivity('subcategory-added', 'Added subcategory', created.name);
       await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
@@ -718,7 +768,9 @@ export default function ExpenseTrackerPage() {
 
   const handleArchiveCategory = async (categoryId: string) => {
     try {
+      const categoryName = getCategoryName(categoryId);
       await archiveCategory(categoryId);
+      await recordMonthActivity('category-archived', 'Archived category', categoryName);
       await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
@@ -744,6 +796,7 @@ export default function ExpenseTrackerPage() {
 
       setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'saving' }));
       await upsertBudget(selectedMonth, categoryId, amountCents);
+      await recordMonthActivity('budget-updated', 'Updated budget amount', `${getCategoryName(categoryId)} • ${formatCurrency(amountCents)}`);
       setBudgets(prev => ({ ...prev, [categoryId]: amountCents }));
       setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'saved' }));
       if (budgetStatusTimeouts.current[categoryId]) {
@@ -757,9 +810,14 @@ export default function ExpenseTrackerPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (expense: Expense) => {
     try {
-      await deleteExpense(id);
+      await deleteExpense(expense.id);
+      await recordMonthActivity(
+        'expense-deleted',
+        'Deleted transaction',
+        `${getExpenseLabel(expense)} • ${expense.date} • ${getCategoryName(expense.categoryId)}`
+      );
       await loadData(selectedMonth);
       setError(null);
     } catch (caughtError) {
@@ -833,8 +891,18 @@ export default function ExpenseTrackerPage() {
         }
 
         await updateExpense({ ...current, ...payload });
+        await recordMonthActivity(
+          'expense-updated',
+          'Updated transaction',
+          `${getExpenseLabel(payload)} • ${payload.date} • ${getCategoryName(payload.categoryId)}`
+        );
       } else {
         await addExpense(payload);
+        await recordMonthActivity(
+          'expense-added',
+          'Added transaction',
+          `${getExpenseLabel(payload)} • ${payload.date} • ${getCategoryName(payload.categoryId)}`
+        );
       }
 
       setLastUsedCategory(form.categoryId);
@@ -874,7 +942,7 @@ export default function ExpenseTrackerPage() {
               </button>
             </div>
             <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
-              <button className="rounded border border-slate-700 px-4 py-2 text-sm" onClick={handleDuplicateLastExpense} disabled={!latestExpense}>
+              <button className="rounded border border-slate-700 px-4 py-2 text-sm" onClick={handleDuplicateLastExpense} disabled={!latestEnteredExpense}>
                 Duplicate last
               </button>
               <button className="rounded bg-brand-600 px-4 py-2 font-semibold" onClick={startAddExpense}>
@@ -1001,18 +1069,35 @@ export default function ExpenseTrackerPage() {
           </button>
 
           {isTransactionsCollapsed ? (
-            latestExpense ? (
+            <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded border border-slate-800 p-3 text-sm">
                 <p className="text-xs uppercase tracking-wide text-slate-400">Last transaction entered</p>
-                <p className="mt-1 font-medium">{latestExpense.merchant || latestExpense.note || 'Expense'}</p>
-                <p className="text-slate-400">
-                  {latestExpense.date} • {categories.find(item => item.id === latestExpense.categoryId)?.name ?? 'Uncategorized'}
-                </p>
-                <p className="mt-1 font-semibold">{formatCurrency(latestExpense.amountCents)}</p>
+                {latestEnteredExpense ? (
+                  <>
+                    <p className="mt-1 font-medium">{getExpenseLabel(latestEnteredExpense)}</p>
+                    <p className="text-slate-400">
+                      {latestEnteredExpense.date} • {getCategoryName(latestEnteredExpense.categoryId)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">Entered {formatTimestamp(latestEnteredExpense.createdAt)}</p>
+                    <p className="mt-1 font-semibold">{formatCurrency(latestEnteredExpense.amountCents)}</p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-slate-400">No transactions yet for this month.</p>
+                )}
               </div>
-            ) : (
-              <p className="text-sm text-slate-400">No transactions yet for this month.</p>
-            )
+              <div className="rounded border border-slate-800 p-3 text-sm">
+                <p className="text-xs uppercase tracking-wide text-slate-400">Last budget change</p>
+                {monthActivity ? (
+                  <>
+                    <p className="mt-1 font-medium">{monthActivity.title}</p>
+                    {monthActivity.detail && <p className="text-slate-400">{monthActivity.detail}</p>}
+                    <p className="mt-1 text-xs text-slate-500">{formatTimestamp(monthActivity.occurredAt)}</p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-slate-400">No changes recorded for this month yet.</p>
+                )}
+              </div>
+            </div>
           ) : (
             <>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -1097,7 +1182,7 @@ export default function ExpenseTrackerPage() {
                           <div className="flex items-center gap-2">
                             <p className="font-semibold">{formatCurrency(expense.amountCents)}</p>
                             <button className="rounded border border-slate-700 px-2 py-1 text-xs" onClick={() => handleEdit(expense)}>Edit</button>
-                            <button className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-300" onClick={() => handleDelete(expense.id)}>Delete</button>
+                            <button className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-300" onClick={() => handleDelete(expense)}>Delete</button>
                           </div>
                         </div>
                       );
