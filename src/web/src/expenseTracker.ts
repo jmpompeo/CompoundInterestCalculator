@@ -31,8 +31,26 @@ export type Expense = {
   updatedAt: string;
 };
 
+export type MonthActivityActionType =
+  | 'expense-added'
+  | 'expense-updated'
+  | 'expense-deleted'
+  | 'budget-updated'
+  | 'category-added'
+  | 'subcategory-added'
+  | 'category-archived'
+  | 'budget-layout-updated';
+
+export type MonthActivitySummary = {
+  month: string;
+  occurredAt: string;
+  actionType: MonthActivityActionType;
+  title: string;
+  detail?: string;
+};
+
 const DB_NAME = 'expense-tracker-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const LAST_CATEGORY_KEY = 'expense-tracker-last-category';
 
 const DEFAULT_SUBCATEGORY_NAMES = ['Bills', 'Savings', 'Debts', 'Subscriptions', 'Variable Spending'];
@@ -88,6 +106,10 @@ const openDb = async (): Promise<IDBDatabase> =>
       if (!db.objectStoreNames.contains('expenses')) {
         const expenseStore = db.createObjectStore('expenses', { keyPath: 'id' });
         expenseStore.createIndex('date', 'date', { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains('monthActivity')) {
+        db.createObjectStore('monthActivity', { keyPath: 'month' });
       }
     };
   });
@@ -394,6 +416,18 @@ export const getBudgetsByMonth = async (month: string): Promise<Budget[]> =>
     const budgets = await requestAsPromise(index.getAll(month));
     return budgets as Budget[];
   });
+
+export const getMonthActivitySummary = async (month: string): Promise<MonthActivitySummary | null> =>
+  runTransaction(['monthActivity'], 'readonly', async tx => {
+    const summary = await requestAsPromise(tx.objectStore('monthActivity').get(month));
+    return (summary as MonthActivitySummary | undefined) ?? null;
+  });
+
+export const setMonthActivitySummary = async (summary: MonthActivitySummary): Promise<void> => {
+  await runTransaction(['monthActivity'], 'readwrite', async tx => {
+    tx.objectStore('monthActivity').put(summary);
+  });
+};
 
 export const autoCopyBudgetsFromPreviousMonth = async (
   month: string
