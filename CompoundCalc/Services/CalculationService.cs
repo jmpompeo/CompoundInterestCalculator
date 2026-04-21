@@ -126,6 +126,46 @@ public sealed class CalculationService : ICalculationService
             calculationVersion: DefaultCalculationVersion);
     }
 
+    public CarLoanResult CalculateCarLoanEstimate(CarLoanRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var netTradeInCredit = Math.Max(request.TradeInValue - request.TradeInPayoff, 0m);
+        var totalUpfrontCredit = request.CashDownPayment + netTradeInCredit;
+        var taxableBase = Math.Max(request.VehiclePrice - request.Rebate - request.TradeInValue, 0m);
+        var salesTax = request.SalesTaxAmount ?? (taxableBase * (request.SalesTaxPercent!.Value / 100m));
+        var preCreditTotal = request.VehiclePrice + salesTax + request.Fees + request.FinancedExtras - request.Rebate;
+        var amountFinanced = Math.Max(preCreditTotal - totalUpfrontCredit, 0m);
+
+        var monthlyRate = decimal.Divide(Conversions.ConvertPercentageToDecimal(request.AnnualRatePercent), 12m);
+        var monthlyPayment = CalculateMonthlyMortgagePayment(amountFinanced, monthlyRate, request.TermMonths);
+
+        var amortization = BuildAmortizationSchedule(amountFinanced, monthlyRate, request.TermMonths, monthlyPayment);
+        var totalPaid = amortization.Sum(x => x.Payment);
+        var totalInterest = amortization.Sum(x => x.Interest);
+
+        return CarLoanResult.Create(
+            vehiclePrice: request.VehiclePrice,
+            cashDownPayment: request.CashDownPayment,
+            tradeInValue: request.TradeInValue,
+            tradeInPayoff: request.TradeInPayoff,
+            netTradeInCredit: netTradeInCredit,
+            totalUpfrontCredit: totalUpfrontCredit,
+            salesTax: salesTax,
+            fees: request.Fees,
+            rebate: request.Rebate,
+            financedExtras: request.FinancedExtras,
+            amountFinanced: amountFinanced,
+            annualRatePercent: request.AnnualRatePercent,
+            termMonths: request.TermMonths,
+            monthlyPayment: monthlyPayment,
+            totalPaid: totalPaid,
+            totalInterest: totalInterest,
+            amortizationSchedule: amortization,
+            currencyFormatter: Conversions.ConvertDecimalToCurrency,
+            calculationVersion: DefaultCalculationVersion);
+    }
+
     private static CalculationResult RunCalculation(
         decimal principal,
         decimal annualRatePercent,
@@ -200,5 +240,39 @@ public sealed class CalculationService : ICalculationService
         }
 
         return decimal.Divide(principal * monthlyRate, denominator);
+    }
+
+    private static IReadOnlyList<CarLoanAmortizationEntry> BuildAmortizationSchedule(
+        decimal principal,
+        decimal monthlyRate,
+        int termMonths,
+        decimal scheduledPayment)
+    {
+        var schedule = new List<CarLoanAmortizationEntry>(termMonths);
+        var remainingBalance = principal;
+
+        for (var month = 1; month <= termMonths; month++)
+        {
+            if (remainingBalance <= 0m)
+            {
+                break;
+            }
+
+            var interest = monthlyRate > 0m
+                ? decimal.Round(remainingBalance * monthlyRate, 10, MidpointRounding.ToEven)
+                : 0m;
+            var payment = Math.Min(scheduledPayment, remainingBalance + interest);
+            var principalPaid = payment - interest;
+            remainingBalance = decimal.Round(Math.Max(remainingBalance - principalPaid, 0m), 10, MidpointRounding.ToEven);
+
+            schedule.Add(new CarLoanAmortizationEntry(
+                Month: month,
+                Payment: decimal.Round(payment, 2, MidpointRounding.ToEven),
+                Principal: decimal.Round(principalPaid, 2, MidpointRounding.ToEven),
+                Interest: decimal.Round(interest, 2, MidpointRounding.ToEven),
+                RemainingBalance: decimal.Round(remainingBalance, 2, MidpointRounding.ToEven)));
+        }
+
+        return schedule;
     }
 }
