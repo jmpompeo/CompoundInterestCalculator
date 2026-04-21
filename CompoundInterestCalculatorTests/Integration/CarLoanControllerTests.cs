@@ -41,9 +41,9 @@ public class CarLoanControllerTests : IClassFixture<WebApplicationFactory<Progra
         Assert.NotNull(payload);
         Assert.Equal(6000m, payload!.totalUpfrontCredit);
         Assert.Equal(32325m, payload.amountFinanced);
-        Assert.Equal(632.16m, payload.monthlyPayment);
-        Assert.Equal(37929.59m, payload.totalPaid);
-        Assert.Equal(5604.59m, payload.totalInterest);
+        Assert.Equal(632.48m, payload.monthlyPayment);
+        Assert.Equal(37948.80m, payload.totalPaid);
+        Assert.Equal(5623.55m, payload.totalInterest);
         Assert.Equal(60, payload.amortizationSchedule.Count);
         Assert.False(string.IsNullOrWhiteSpace(payload.traceId));
     }

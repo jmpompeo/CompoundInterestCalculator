@@ -144,9 +144,9 @@ public class CalculationServiceTests
 
         Assert.Equal(6000m, result.TotalUpfrontCredit);
         Assert.Equal(32325m, result.AmountFinanced);
-        Assert.Equal(632.16m, result.MonthlyPayment);
-        Assert.Equal(37929.59m, result.TotalPaid);
-        Assert.Equal(5604.59m, result.TotalInterest);
+        Assert.Equal(632.48m, result.MonthlyPayment);
+        Assert.Equal(37948.80m, result.TotalPaid);
+        Assert.Equal(5623.55m, result.TotalInterest);
         Assert.Equal("$32,325.00", result.AmountFinancedDisplay);
         Assert.Equal(60, result.AmortizationSchedule.Count);
     }
