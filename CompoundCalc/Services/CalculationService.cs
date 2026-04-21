@@ -132,7 +132,7 @@ public sealed class CalculationService : ICalculationService
 
         var netTradeInCredit = Math.Max(request.TradeInValue - request.TradeInPayoff, 0m);
         var totalUpfrontCredit = request.CashDownPayment + netTradeInCredit;
-        var taxableBase = Math.Max(request.VehiclePrice - request.Rebate - request.TradeInValue, 0m);
+        var taxableBase = request.VehiclePrice;
         var salesTax = request.SalesTaxAmount ?? (taxableBase * (request.SalesTaxPercent!.Value / 100m));
         var preCreditTotal = request.VehiclePrice + salesTax + request.Fees + request.FinancedExtras - request.Rebate;
         var amountFinanced = Math.Max(preCreditTotal - totalUpfrontCredit, 0m);
