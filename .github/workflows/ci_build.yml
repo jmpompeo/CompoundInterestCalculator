@@ -1,11 +1,11 @@
 name: Build
 
 on:
-  push:
-    branches: [main, 'release/**', 'feature/**', 'req/**']
   pull_request:
-    types: closed
     branches: [main, 'release/**']
+  push:
+    branches: [main, 'release/**']
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -45,9 +45,6 @@ jobs:
     - name: Run unit tests
       run: dotnet test --configuration Release --no-build --logger trx --results-directory "TestResults-${{ matrix.dotnet-version }}"
 
-    - name: Check dotnet tool list
-      run: dotnet tool list --global
-
     - name: Verify formatting
       run: dotnet format --verify-no-changes --verbosity diagnostic
 
@@ -56,18 +53,3 @@ jobs:
       with:
         name: dotnet-results-${{ matrix.dotnet-version }}
         path: TestResults-${{ matrix.dotnet-version }}
-
-  deploy:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Trigger Render deploy
-        env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
-        run: |
-          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
-            echo "RENDER_DEPLOY_HOOK secret is not set. Skipping deploy hook (auto-deploy from GitHub is enabled)."
-            exit 0
-          fi
-          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK"
