@@ -263,7 +263,7 @@ export default function CarPaymentPage() {
                     type="number"
                     inputMode="decimal"
                     min={0.01}
-                    step={1}
+                    step={0.01}
                     onKeyDown={preventInvalidNumericInput}
                     className="rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2 text-base text-white focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
                     value={form.vehiclePrice}
