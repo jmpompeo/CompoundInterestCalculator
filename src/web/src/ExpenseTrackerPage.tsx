@@ -24,6 +24,7 @@ import {
   seedDefaultSubcategories,
   setMonthActivitySummary,
   setLastUsedCategory,
+  unarchiveCategory,
   updateExpense,
   upsertBudget
 } from './expenseTracker';
@@ -396,6 +397,12 @@ export default function ExpenseTrackerPage() {
   const sortedManagerCategories = useMemo(() => {
     return [...activeCategories].sort((a, b) => a.name.localeCompare(b.name));
   }, [activeCategories]);
+
+  const archivedManagerCategories = useMemo(() => {
+    return categories
+      .filter(category => category.isArchived)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories]);
 
   const budgetTotals = useMemo(() => {
     return activeCategories.reduce(
@@ -775,6 +782,16 @@ export default function ExpenseTrackerPage() {
       setError(null);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Unable to archive item.');
+    }
+  };
+
+  const handleUnarchiveCategory = async (categoryId: string) => {
+    try {
+      await unarchiveCategory(categoryId);
+      await loadData(selectedMonth);
+      setError(null);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Unable to unarchive item.');
     }
   };
 
@@ -1225,7 +1242,7 @@ export default function ExpenseTrackerPage() {
           </div>
           {!isBudgetsCollapsed && (
             <div className="rounded border border-slate-800">
-              <div className="hidden items-center gap-x-3 border-b border-slate-800 px-3 py-2 text-xs uppercase tracking-wide text-slate-400 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)]">
+              <div className="hidden items-center gap-x-3 border-b border-slate-800 px-3 py-2 text-xs uppercase tracking-wide text-slate-400 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,14ch)]">
                 <div>Item</div>
                 <div className="justify-self-end text-right">Budget</div>
                 <div className="justify-self-end text-right">Spent</div>
@@ -1293,7 +1310,7 @@ export default function ExpenseTrackerPage() {
                           return (
                             <div
                               key={category.id}
-                              className={`grid grid-cols-2 gap-x-3 gap-y-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)] ${
+                              className={`grid grid-cols-2 gap-x-3 gap-y-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,14ch)] ${
                                 budgetSort === 'custom' ? 'cursor-move' : ''
                               } ${isDragging ? 'opacity-60' : ''} ${dragIndicator}`}
                               draggable={budgetSort === 'custom'}
@@ -1341,7 +1358,7 @@ export default function ExpenseTrackerPage() {
                           );
                         })
                       ))}
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/60 px-3 py-2 text-xs sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)]">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/60 px-3 py-2 text-xs sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,14ch)]">
                         <div className="order-1 font-semibold text-slate-300 sm:order-none">Subtotal</div>
                         <div className="order-4 justify-self-end text-right font-semibold tabular-nums text-slate-300 sm:order-none">
                           {formatCurrency(group.totals.budget)}
@@ -1359,7 +1376,7 @@ export default function ExpenseTrackerPage() {
                     </Fragment>
                   );
                 })}
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/40 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,6ch)]">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/40 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,14ch)]">
                   <div className="order-1 font-semibold text-slate-200 sm:order-none">Total</div>
                   <div className="order-4 justify-self-end text-right font-semibold tabular-nums text-slate-200 sm:order-none">
                     {formatCurrency(budgetTotals.budget)}
@@ -1473,10 +1490,25 @@ export default function ExpenseTrackerPage() {
 
               <div className="mt-4 text-sm text-slate-400">
                 <p className="font-medium text-slate-300">Archived items</p>
-                {categories.filter(category => category.isArchived).length === 0 ? (
+                {archivedManagerCategories.length === 0 ? (
                   <p>None</p>
                 ) : (
-                  <p>{categories.filter(category => category.isArchived).map(category => category.name).join(', ')}</p>
+                  <div className="mt-2 space-y-2">
+                    {archivedManagerCategories.map(category => (
+                      <div
+                        key={category.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 p-3 text-sm"
+                      >
+                        <p className="font-medium text-slate-200">{category.name}</p>
+                        <button
+                          className="rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-300"
+                          onClick={() => handleUnarchiveCategory(category.id)}
+                        >
+                          Unarchive
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </>

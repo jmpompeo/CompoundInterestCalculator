@@ -124,6 +124,58 @@ public class CalculationServiceTests
         Assert.Throws<InvalidOperationException>(() => _service.CalculateDebtPayoff(request));
     }
 
+    [Fact]
+    public void CalculateCarLoanEstimate_ComputesExpectedTotals()
+    {
+        var request = new CarLoanRequest(
+            vehiclePrice: 35000m,
+            cashDownPayment: 3000m,
+            tradeInValue: 8000m,
+            tradeInPayoff: 5000m,
+            annualRatePercent: 6.5m,
+            termMonths: 60,
+            salesTaxPercent: 7.5m,
+            salesTaxAmount: null,
+            fees: 1200m,
+            rebate: 1000m,
+            financedExtras: 500m);
+
+        var result = _service.CalculateCarLoanEstimate(request);
+
+        Assert.Equal(6000m, result.TotalUpfrontCredit);
+        Assert.Equal(32325m, result.AmountFinanced);
+        Assert.Equal(632.48m, result.MonthlyPayment);
+        Assert.Equal(37948.80m, result.TotalPaid);
+        Assert.Equal(5623.55m, result.TotalInterest);
+        Assert.Equal("$32,325.00", result.AmountFinancedDisplay);
+        Assert.Equal(60, result.AmortizationSchedule.Count);
+    }
+
+    [Fact]
+    public void CalculateCarLoanEstimate_WithZeroApr_HasNoInterest()
+    {
+        var request = new CarLoanRequest(
+            vehiclePrice: 20000m,
+            cashDownPayment: 2000m,
+            tradeInValue: 0m,
+            tradeInPayoff: 0m,
+            annualRatePercent: 0m,
+            termMonths: 40,
+            salesTaxPercent: null,
+            salesTaxAmount: 0m,
+            fees: 0m,
+            rebate: 0m,
+            financedExtras: 0m);
+
+        var result = _service.CalculateCarLoanEstimate(request);
+
+        Assert.Equal(18000m, result.AmountFinanced);
+        Assert.Equal(450m, result.MonthlyPayment);
+        Assert.Equal(18000m, result.TotalPaid);
+        Assert.Equal(0m, result.TotalInterest);
+        Assert.Equal(40, result.AmortizationSchedule.Count);
+    }
+
     private static decimal ComputeExpectedBalance(
         decimal principal,
         decimal annualRatePercent,

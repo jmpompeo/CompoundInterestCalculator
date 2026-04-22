@@ -37,6 +37,20 @@ public sealed class CalculationMapper
             CalculateAnnualPropertyTax(request),
             CalculateAnnualPmi(request));
 
+    public CarLoanRequest ToCarLoanDomain(CarLoanEstimateRequestDto request)
+        => new(
+            request.VehiclePrice,
+            request.CashDownPayment,
+            request.TradeInValue,
+            request.TradeInPayoff,
+            request.AnnualRatePercent,
+            request.TermMonths,
+            request.SalesTaxPercent,
+            request.SalesTaxAmount,
+            request.Fees,
+            request.Rebate,
+            request.FinancedExtras);
+
     public CalculationResponseDto ToResponse(
         ContributionGrowthRequestDto request,
         CalculationResult result,
@@ -111,6 +125,54 @@ public sealed class CalculationMapper
             ClientReference = request.ClientReference,
             RequestedAt = request.RequestedAt,
             CalculatedAt = calculatedAt
+        };
+
+    public CarLoanEstimateResponseDto ToResponse(
+        CarLoanEstimateRequestDto request,
+        CarLoanResult result,
+        string traceId,
+        Guid responseId,
+        DateTimeOffset calculatedAt)
+        => new()
+        {
+            VehiclePrice = result.VehiclePrice,
+            CashDownPayment = result.CashDownPayment,
+            TradeInValue = result.TradeInValue,
+            TradeInPayoff = result.TradeInPayoff,
+            NetTradeInCredit = result.NetTradeInCredit,
+            TotalUpfrontCredit = result.TotalUpfrontCredit,
+            SalesTax = result.SalesTax,
+            Fees = result.Fees,
+            Rebate = result.Rebate,
+            FinancedExtras = result.FinancedExtras,
+            AmountFinanced = result.AmountFinanced,
+            AnnualRatePercent = result.AnnualRatePercent,
+            TermMonths = result.TermMonths,
+            MonthlyPayment = result.MonthlyPayment,
+            TotalPaid = result.TotalPaid,
+            TotalInterest = result.TotalInterest,
+            AmountFinancedDisplay = result.AmountFinancedDisplay,
+            MonthlyPaymentDisplay = result.MonthlyPaymentDisplay,
+            TotalPaidDisplay = result.TotalPaidDisplay,
+            TotalInterestDisplay = result.TotalInterestDisplay,
+            TotalUpfrontCreditDisplay = result.TotalUpfrontCreditDisplay,
+            NetTradeInCreditDisplay = result.NetTradeInCreditDisplay,
+            CalculationVersion = result.CalculationVersion,
+            TraceId = traceId,
+            ResponseId = responseId,
+            ClientReference = request.ClientReference,
+            RequestedAt = request.RequestedAt,
+            CalculatedAt = calculatedAt,
+            AmortizationSchedule = result.AmortizationSchedule
+                .Select(entry => new CarLoanAmortizationEntryDto
+                {
+                    Month = entry.Month,
+                    Payment = entry.Payment,
+                    Principal = entry.Principal,
+                    Interest = entry.Interest,
+                    RemainingBalance = entry.RemainingBalance
+                })
+                .ToList()
         };
 
     private static CalculationResponseDto CreateResponse(
