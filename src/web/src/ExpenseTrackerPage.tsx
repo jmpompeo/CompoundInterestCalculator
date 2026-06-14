@@ -5,6 +5,7 @@ import {
   archiveCategory,
   autoCopyBudgetsFromPreviousMonth,
   Category,
+  deleteBudget,
   Expense,
   getMonthActivitySummary,
   MonthActivityActionType,
@@ -43,11 +44,22 @@ type CategoryDropPlacement = 'before' | 'after';
 type BudgetSort = 'custom' | 'alpha-asc' | 'alpha-desc' | 'budget-desc' | 'spent-desc' | 'remaining-desc';
 
 const DEFAULT_SUBCATEGORY_ORDER = ['Bills', 'Savings', 'Debts', 'Subscriptions', 'Variable Spending'];
+const budgetTableDesktopColumns = 'sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]';
 
 const today = new Date();
 const monthString = (date: Date): string => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const dateString = (date: Date): string => `${monthString(date)}-${String(date.getDate()).padStart(2, '0')}`;
-const formatCurrency = (cents: number): string => (cents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+const usdCurrencyFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const budgetEditFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+  useGrouping: false
+});
+const formatCurrency = (cents: number): string => usdCurrencyFormatter.format(cents / 100);
+const formatBudgetDisplayValue = (amountCents: number | undefined): string =>
+  typeof amountCents === 'number' && Number.isFinite(amountCents) ? formatCurrency(amountCents) : '';
+const formatBudgetEditValue = (amountCents: number | undefined): string =>
+  typeof amountCents === 'number' && Number.isFinite(amountCents) ? budgetEditFormatter.format(amountCents / 100) : '';
 const formatMonthLabel = (month: string): string => {
   const [year, monthPart] = month.split('-').map(Number);
   return new Date(year, monthPart - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
@@ -68,6 +80,28 @@ const parseCurrencyInputToCents = (value: string): number | null => {
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return Math.round(parsed * 100);
 };
+
+const parseBudgetInputToCents = (value: string): { amountCents: number | null; isBlank: boolean } => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { amountCents: null, isBlank: true };
+  }
+
+  const normalized = trimmed.replace(/[$,\s]/g, '');
+  if (!normalized) {
+    return { amountCents: null, isBlank: true };
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return { amountCents: null, isBlank: false };
+  }
+
+  return { amountCents: Math.round(parsed * 100), isBlank: false };
+};
+
+const hasBudgetValue = (budgetMap: Record<string, number>, categoryId: string): boolean =>
+  Object.prototype.hasOwnProperty.call(budgetMap, categoryId);
 
 export default function ExpenseTrackerPage() {
   const [selectedMonth, setSelectedMonth] = useState(monthString(today));
@@ -182,7 +216,7 @@ export default function ExpenseTrackerPage() {
     );
     setBudgetInputs(
       nextCategories.reduce<Record<string, string>>((acc, category) => {
-        acc[category.id] = budgetMap[category.id] ? String(budgetMap[category.id] / 100) : '';
+        acc[category.id] = formatBudgetDisplayValue(budgetMap[category.id]);
         return acc;
       }, {})
     );
@@ -798,15 +832,43 @@ export default function ExpenseTrackerPage() {
   const handleBudgetAutoSave = async (categoryId: string) => {
     try {
       const rawValue = budgetInputs[categoryId] ?? '';
-      const amount = Number(rawValue);
-      if (!Number.isFinite(amount) || amount < 0) {
+      const { amountCents, isBlank } = parseBudgetInputToCents(rawValue);
+      const current = budgets[categoryId] ?? 0;
+      const hasSavedBudget = hasBudgetValue(budgets, categoryId);
+
+      if (isBlank) {
+        if (!hasSavedBudget) {
+          setBudgetInputs(prev => ({ ...prev, [categoryId]: '' }));
+          setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'idle' }));
+          return;
+        }
+
+        setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'saving' }));
+        await deleteBudget(selectedMonth, categoryId);
+        await recordMonthActivity('budget-updated', 'Updated budget amount', `${getCategoryName(categoryId)} • cleared`);
+        setBudgets(prev => {
+          const next = { ...prev };
+          delete next[categoryId];
+          return next;
+        });
+        setBudgetInputs(prev => ({ ...prev, [categoryId]: '' }));
+        setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'saved' }));
+        if (budgetStatusTimeouts.current[categoryId]) {
+          window.clearTimeout(budgetStatusTimeouts.current[categoryId]);
+        }
+        budgetStatusTimeouts.current[categoryId] = window.setTimeout(() => {
+          setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'idle' }));
+        }, 1500);
+        return;
+      }
+
+      if (amountCents === null) {
         setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'error' }));
         return;
       }
 
-      const amountCents = Math.round(amount * 100);
-      const current = budgets[categoryId] ?? 0;
-      if (amountCents === current) {
+      if (amountCents === current && hasSavedBudget) {
+        setBudgetInputs(prev => ({ ...prev, [categoryId]: formatBudgetDisplayValue(amountCents) }));
         setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'idle' }));
         return;
       }
@@ -815,6 +877,7 @@ export default function ExpenseTrackerPage() {
       await upsertBudget(selectedMonth, categoryId, amountCents);
       await recordMonthActivity('budget-updated', 'Updated budget amount', `${getCategoryName(categoryId)} • ${formatCurrency(amountCents)}`);
       setBudgets(prev => ({ ...prev, [categoryId]: amountCents }));
+      setBudgetInputs(prev => ({ ...prev, [categoryId]: formatBudgetDisplayValue(amountCents) }));
       setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'saved' }));
       if (budgetStatusTimeouts.current[categoryId]) {
         window.clearTimeout(budgetStatusTimeouts.current[categoryId]);
@@ -825,6 +888,25 @@ export default function ExpenseTrackerPage() {
     } catch (caughtError) {
       setBudgetSaveStatus(prev => ({ ...prev, [categoryId]: 'error' }));
     }
+  };
+
+  const handleBudgetInputFocus = (categoryId: string) => {
+    const savedDisplayValue = hasBudgetValue(budgets, categoryId) ? formatBudgetDisplayValue(budgets[categoryId]) : '';
+    const currentValue = budgetInputs[categoryId] ?? '';
+
+    if (currentValue && currentValue !== savedDisplayValue) {
+      return;
+    }
+
+    setBudgetInputs(prev => ({
+      ...prev,
+      [categoryId]: hasBudgetValue(budgets, categoryId) ? formatBudgetEditValue(budgets[categoryId]) : ''
+    }));
+  };
+
+  const handleBudgetInputChange = (categoryId: string, value: string) => {
+    setBudgetInputs(prev => ({ ...prev, [categoryId]: value }));
+    setBudgetSaveStatus(prev => (prev[categoryId] ? { ...prev, [categoryId]: 'idle' } : prev));
   };
 
   const handleDelete = async (expense: Expense) => {
@@ -1242,12 +1324,12 @@ export default function ExpenseTrackerPage() {
           </div>
           {!isBudgetsCollapsed && (
             <div className="rounded border border-slate-800">
-              <div className="hidden items-center gap-x-3 border-b border-slate-800 px-3 py-2 text-xs uppercase tracking-wide text-slate-400 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,14ch)]">
+              <div className={`hidden items-center gap-x-3 border-b border-slate-800 px-3 py-2 text-xs uppercase tracking-wide text-slate-400 sm:grid ${budgetTableDesktopColumns}`}>
                 <div>Item</div>
-                <div className="justify-self-center text-center">Budget</div>
-                <div className="justify-self-center text-center">Spent</div>
-                <div className="justify-self-center text-center">Remaining</div>
-                <div className="justify-self-center text-center">Status</div>
+                <div className="text-center">Budget</div>
+                <div className="text-center">Spent</div>
+                <div className="text-center">Remaining</div>
+                <div className="text-center">Status</div>
               </div>
               <div className="divide-y divide-slate-800">
                 {groupedBudgetItems.map(group => {
@@ -1310,7 +1392,7 @@ export default function ExpenseTrackerPage() {
                           return (
                             <div
                               key={category.id}
-                              className={`grid grid-cols-2 gap-x-3 gap-y-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,14ch)] ${
+                              className={`grid grid-cols-2 gap-x-3 gap-y-1 px-3 py-2 text-sm sm:grid ${budgetTableDesktopColumns} ${
                                 budgetSort === 'custom' ? 'cursor-move' : ''
                               } ${isDragging ? 'opacity-60' : ''} ${dragIndicator}`}
                               draggable={budgetSort === 'custom'}
@@ -1320,15 +1402,14 @@ export default function ExpenseTrackerPage() {
                               onDragEnd={handleBudgetDragEnd}
                             >
                               <div className="order-1 font-medium sm:order-none">{category.name}</div>
-                              <div className="order-4 justify-self-stretch sm:order-none sm:w-full sm:max-w-[12rem] sm:justify-self-center">
+                              <div className="order-4 justify-self-stretch sm:order-none sm:flex sm:w-full sm:items-center sm:justify-center">
                                 <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
+                                  type="text"
                                   inputMode="decimal"
-                                  className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-center text-sm tabular-nums"
+                                  className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-center text-sm tabular-nums sm:max-w-[12rem]"
                                   value={budgetInputs[category.id] ?? ''}
-                                  onChange={e => setBudgetInputs(prev => ({ ...prev, [category.id]: e.target.value }))}
+                                  onFocus={() => handleBudgetInputFocus(category.id)}
+                                  onChange={e => handleBudgetInputChange(category.id, e.target.value)}
                                   onBlur={() => void handleBudgetAutoSave(category.id)}
                                   onKeyDown={event => {
                                     if (event.key === 'Enter') {
@@ -1336,19 +1417,20 @@ export default function ExpenseTrackerPage() {
                                       event.currentTarget.blur();
                                     }
                                   }}
+                                  placeholder="$0.00"
                                   aria-label={`Budget for ${category.name}`}
                                 />
                               </div>
-                              <div className="order-3 justify-self-end text-right tabular-nums text-slate-300 sm:order-none sm:justify-self-center sm:text-center">{formatCurrency(spent)}</div>
+                              <div className="order-3 justify-self-end text-right tabular-nums text-slate-300 sm:order-none sm:w-full sm:text-center">{formatCurrency(spent)}</div>
                               <div
-                                className={`order-2 justify-self-end text-right font-semibold tabular-nums sm:order-none sm:justify-self-center sm:text-center ${
+                                className={`order-2 justify-self-end text-right font-semibold tabular-nums sm:order-none sm:w-full sm:text-center ${
                                   delta >= 0 ? 'text-emerald-300' : 'text-rose-300'
                                 }`}
                               >
                                 {formatCurrency(delta)}
                               </div>
                               <div
-                                className={`order-5 col-span-2 justify-self-end text-right text-xs sm:col-span-1 sm:order-none sm:justify-self-center sm:text-center ${
+                                className={`order-5 col-span-2 justify-self-end text-right text-xs sm:col-span-1 sm:order-none sm:w-full sm:text-center ${
                                   status === 'error' ? 'text-rose-300' : status === 'saved' ? 'text-emerald-300' : 'text-slate-400'
                                 }`}
                               >
@@ -1358,34 +1440,34 @@ export default function ExpenseTrackerPage() {
                           );
                         })
                       ))}
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/60 px-3 py-2 text-xs sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,14ch)]">
+                      <div className={`grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/60 px-3 py-2 text-xs sm:grid ${budgetTableDesktopColumns}`}>
                         <div className="order-1 font-semibold text-slate-300 sm:order-none">Subtotal</div>
-                        <div className="order-4 justify-self-end text-right font-semibold tabular-nums text-slate-300 sm:order-none sm:justify-self-center sm:text-center">
+                        <div className="order-4 justify-self-end text-right font-semibold tabular-nums text-slate-300 sm:order-none sm:w-full sm:text-center">
                           {formatCurrency(group.totals.budget)}
                         </div>
-                        <div className="order-3 justify-self-end text-right font-semibold tabular-nums text-slate-300 sm:order-none sm:justify-self-center sm:text-center">
+                        <div className="order-3 justify-self-end text-right font-semibold tabular-nums text-slate-300 sm:order-none sm:w-full sm:text-center">
                           {formatCurrency(group.totals.spent)}
                         </div>
-                        <div className="order-2 justify-self-end text-right font-semibold tabular-nums text-slate-300 sm:order-none sm:justify-self-center sm:text-center">
+                        <div className="order-2 justify-self-end text-right font-semibold tabular-nums text-slate-300 sm:order-none sm:w-full sm:text-center">
                           {formatCurrency(group.totals.remaining)}
                         </div>
-                        <div className="order-5 col-span-2 justify-self-end text-right text-xs text-slate-500 sm:col-span-1 sm:order-none sm:justify-self-center sm:text-center">
+                        <div className="order-5 col-span-2 justify-self-end text-right text-xs text-slate-500 sm:col-span-1 sm:order-none sm:w-full sm:text-center">
                           {group.name}
                         </div>
                       </div>
                     </Fragment>
                   );
                 })}
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/40 px-3 py-2 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,14ch)]">
+                <div className={`grid grid-cols-2 gap-x-3 gap-y-1 bg-slate-950/40 px-3 py-2 text-sm sm:grid ${budgetTableDesktopColumns}`}>
                   <div className="order-1 font-semibold text-slate-200 sm:order-none">Total</div>
-                  <div className="order-4 justify-self-end text-right font-semibold tabular-nums text-slate-200 sm:order-none sm:justify-self-center sm:text-center">
+                  <div className="order-4 justify-self-end text-right font-semibold tabular-nums text-slate-200 sm:order-none sm:w-full sm:text-center">
                     {formatCurrency(budgetTotals.budget)}
                   </div>
-                  <div className="order-3 justify-self-end text-right font-semibold tabular-nums text-slate-200 sm:order-none sm:justify-self-center sm:text-center">
+                  <div className="order-3 justify-self-end text-right font-semibold tabular-nums text-slate-200 sm:order-none sm:w-full sm:text-center">
                     {formatCurrency(budgetTotals.spent)}
                   </div>
-                  <div className="order-2 justify-self-end text-right text-slate-500 sm:order-none sm:justify-self-center sm:text-center">—</div>
-                  <div className="order-5 col-span-2 justify-self-end text-right text-xs text-slate-500 sm:col-span-1 sm:order-none sm:justify-self-center sm:text-center">Totals</div>
+                  <div className="order-2 justify-self-end text-right text-slate-500 sm:order-none sm:w-full sm:text-center">—</div>
+                  <div className="order-5 col-span-2 justify-self-end text-right text-xs text-slate-500 sm:col-span-1 sm:order-none sm:w-full sm:text-center">Totals</div>
                 </div>
               </div>
             </div>
