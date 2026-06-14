@@ -476,6 +476,19 @@ export const upsertBudget = async (month: string, categoryId: string, amountCent
     return budget;
   });
 
+export const deleteBudget = async (month: string, categoryId: string): Promise<void> =>
+  runTransaction(['budgets'], 'readwrite', async tx => {
+    const store = tx.objectStore('budgets');
+    const index = store.index('month_category');
+    const existing = (await requestAsPromise(index.get([month, categoryId]))) as Budget | undefined;
+
+    if (!existing) {
+      return;
+    }
+
+    store.delete(existing.id);
+  });
+
 export const addExpense = async (expense: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>): Promise<Expense> => {
   const now = new Date().toISOString();
   const nextExpense: Expense = {
