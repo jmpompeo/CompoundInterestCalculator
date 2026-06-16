@@ -62,6 +62,79 @@ public class DebtControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("monthlyPayment", problem!.Errors.Keys, StringComparer.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task DebtStrategy_ReturnsBothPlans()
+    {
+        var client = _factory.CreateClient();
+
+        var request = new
+        {
+            monthlyBudget = 500m,
+            debts = new[]
+            {
+                new
+                {
+                    clientDebtId = "large-high",
+                    name = "Large High APR",
+                    currentBalance = 5000m,
+                    annualAprPercent = 20m,
+                    minimumPayment = 100m
+                },
+                new
+                {
+                    clientDebtId = "small-low",
+                    name = "Small Low APR",
+                    currentBalance = 1000m,
+                    annualAprPercent = 5m,
+                    minimumPayment = 25m
+                }
+            }
+        };
+
+        var response = await client.PostAsJsonAsync("/api/v1/debt/strategy", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<DebtStrategyResponse>();
+        Assert.NotNull(payload);
+        Assert.Equal(500m, payload!.monthlyBudget);
+        Assert.Equal("Avalanche", payload.recommendedStrategy);
+        Assert.Equal("small-low", payload.snowball.payoffOrder[0].clientDebtId);
+        Assert.Equal("large-high", payload.avalanche.payoffOrder[0].clientDebtId);
+        Assert.NotEmpty(payload.snowball.timeline);
+        Assert.False(string.IsNullOrWhiteSpace(payload.traceId));
+    }
+
+    [Fact]
+    public async Task DebtStrategy_WhenBudgetBelowMinimums_ReturnsValidationProblem()
+    {
+        var client = _factory.CreateClient();
+
+        var request = new
+        {
+            monthlyBudget = 10m,
+            debts = new[]
+            {
+                new
+                {
+                    clientDebtId = "card",
+                    name = "Card",
+                    currentBalance = 1000m,
+                    annualAprPercent = 10m,
+                    minimumPayment = 100m
+                }
+            }
+        };
+
+        var response = await client.PostAsJsonAsync("/api/v1/debt/strategy", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Contains("monthlyBudget", problem!.Errors.Keys, StringComparer.OrdinalIgnoreCase);
+    }
+
     private sealed record DebtPayoffResponse(
         int monthsToPayoff,
         decimal totalPaid,
@@ -69,4 +142,27 @@ public class DebtControllerTests : IClassFixture<WebApplicationFactory<Program>>
         decimal minimumPaymentRequired,
         string minimumPaymentDisplay,
         string traceId);
+
+    private sealed record DebtStrategyResponse(
+        decimal monthlyBudget,
+        string recommendedStrategy,
+        DebtStrategyPlanResponse snowball,
+        DebtStrategyPlanResponse avalanche,
+        string traceId);
+
+    private sealed record DebtStrategyPlanResponse(
+        string strategy,
+        int monthsToPayoff,
+        decimal totalInterestPaid,
+        IReadOnlyList<DebtStrategyPayoffOrderItemResponse> payoffOrder,
+        IReadOnlyList<DebtStrategyMonthResponse> timeline);
+
+    private sealed record DebtStrategyPayoffOrderItemResponse(
+        string clientDebtId,
+        string name,
+        int payoffMonth);
+
+    private sealed record DebtStrategyMonthResponse(
+        int monthNumber,
+        decimal endingBalance);
 }

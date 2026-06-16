@@ -125,6 +125,108 @@ public class CalculationServiceTests
     }
 
     [Fact]
+    public void CalculateDebtStrategy_OrdersSnowballAndAvalancheDifferently()
+    {
+        var request = new DebtStrategyRequest(
+            monthlyBudget: 500m,
+            debts:
+            [
+                new DebtStrategyDebtRequest("large-high", "Large High APR", 5000m, 20m, 100m),
+                new DebtStrategyDebtRequest("small-low", "Small Low APR", 1000m, 5m, 25m)
+            ]);
+
+        var result = _service.CalculateDebtStrategy(request);
+
+        Assert.Equal("small-low", result.Snowball.PayoffOrder[0].ClientDebtId);
+        Assert.Equal("large-high", result.Avalanche.PayoffOrder[0].ClientDebtId);
+        Assert.Equal("Avalanche", result.RecommendedStrategy);
+        Assert.True(result.Avalanche.TotalInterestPaid < result.Snowball.TotalInterestPaid);
+    }
+
+    [Fact]
+    public void CalculateDebtStrategy_WhenStrategiesHaveSameInterest_ReportsTie()
+    {
+        var request = new DebtStrategyRequest(
+            monthlyBudget: 100m,
+            debts:
+            [
+                new DebtStrategyDebtRequest("a", "A", 100m, 0m, 10m),
+                new DebtStrategyDebtRequest("b", "B", 200m, 0m, 20m)
+            ]);
+
+        var result = _service.CalculateDebtStrategy(request);
+
+        Assert.Equal("Tie", result.RecommendedStrategy);
+        Assert.Equal(result.Snowball.TotalInterestPaid, result.Avalanche.TotalInterestPaid);
+    }
+
+    [Fact]
+    public void CalculateDebtStrategy_RollsExtraBudgetToNextDebtInSameMonth()
+    {
+        var request = new DebtStrategyRequest(
+            monthlyBudget: 100m,
+            debts:
+            [
+                new DebtStrategyDebtRequest("a", "A", 50m, 0m, 10m),
+                new DebtStrategyDebtRequest("b", "B", 200m, 0m, 20m)
+            ]);
+
+        var result = _service.CalculateDebtStrategy(request);
+
+        Assert.Equal(250m, result.Snowball.TotalPaid);
+        Assert.Equal(0m, result.Snowball.TotalInterestPaid);
+        Assert.Equal(1, result.Snowball.PayoffOrder[0].PayoffMonth);
+        var secondDebtMonth = result.Snowball.Timeline[0].Debts.Single(debt => debt.ClientDebtId == "b");
+        Assert.Equal(50m, secondDebtMonth.PaymentApplied);
+        Assert.Equal(20m, secondDebtMonth.MinimumPaymentApplied);
+        Assert.Equal(30m, secondDebtMonth.ExtraPaymentApplied);
+    }
+
+    [Fact]
+    public void CalculateDebtStrategy_PayoffOrderRepresentsStrategyPriority()
+    {
+        var request = new DebtStrategyRequest(
+            monthlyBudget: 120m,
+            debts:
+            [
+                new DebtStrategyDebtRequest("low-rate-small", "Low Rate Small", 100m, 1m, 90m),
+                new DebtStrategyDebtRequest("high-rate-large", "High Rate Large", 1000m, 20m, 10m)
+            ]);
+
+        var result = _service.CalculateDebtStrategy(request);
+
+        Assert.Equal("low-rate-small", result.Snowball.PayoffOrder[0].ClientDebtId);
+        Assert.Equal("high-rate-large", result.Avalanche.PayoffOrder[0].ClientDebtId);
+        Assert.True(result.Avalanche.PayoffOrder[1].PayoffMonth < result.Avalanche.PayoffOrder[0].PayoffMonth);
+    }
+
+    [Fact]
+    public void CalculateDebtStrategy_WhenBudgetBelowMinimums_Throws()
+    {
+        var request = new DebtStrategyRequest(
+            monthlyBudget: 99m,
+            debts:
+            [
+                new DebtStrategyDebtRequest("a", "A", 1000m, 10m, 100m)
+            ]);
+
+        Assert.Throws<InvalidOperationException>(() => _service.CalculateDebtStrategy(request));
+    }
+
+    [Fact]
+    public void CalculateDebtStrategy_WhenBudgetCannotCoverFirstMonthInterest_Throws()
+    {
+        var request = new DebtStrategyRequest(
+            monthlyBudget: 50m,
+            debts:
+            [
+                new DebtStrategyDebtRequest("a", "A", 1000m, 100m, 10m)
+            ]);
+
+        Assert.Throws<InvalidOperationException>(() => _service.CalculateDebtStrategy(request));
+    }
+
+    [Fact]
     public void CalculateCarLoanEstimate_ComputesExpectedTotals()
     {
         var request = new CarLoanRequest(

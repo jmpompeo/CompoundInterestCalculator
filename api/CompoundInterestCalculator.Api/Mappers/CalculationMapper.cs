@@ -1,3 +1,4 @@
+using CompoundCalc.Helpers;
 using CompoundCalc.Models.Requests;
 using CompoundCalc.Models.Responses;
 using CompoundInterestCalculator.Api.Models.Requests;
@@ -27,6 +28,18 @@ public sealed class CalculationMapper
             request.TotalDebt,
             request.MonthlyPayment,
             request.MonthlyRatePercent);
+
+    public DebtStrategyRequest ToDebtStrategyDomain(DebtStrategyRequestDto request)
+        => new(
+            request.MonthlyBudget,
+            request.Debts
+                .Select(debt => new DebtStrategyDebtRequest(
+                    debt.ClientDebtId,
+                    debt.Name,
+                    debt.CurrentBalance,
+                    debt.AnnualAprPercent,
+                    debt.MinimumPayment))
+                .ToList());
 
     public MortgageRequest ToMortgageDomain(MortgageEstimateRequestDto request)
         => new(
@@ -85,6 +98,29 @@ public sealed class CalculationMapper
             TotalInterestPaid = result.TotalInterestPaid,
             TotalPaidDisplay = result.TotalPaidDisplay,
             TotalInterestDisplay = result.TotalInterestDisplay,
+            CalculationVersion = result.CalculationVersion,
+            TraceId = traceId,
+            ResponseId = responseId,
+            ClientReference = request.ClientReference,
+            RequestedAt = request.RequestedAt,
+            CalculatedAt = calculatedAt
+        };
+
+    public DebtStrategyResponseDto ToResponse(
+        DebtStrategyRequestDto request,
+        DebtStrategyResult result,
+        string traceId,
+        Guid responseId,
+        DateTimeOffset calculatedAt)
+        => new()
+        {
+            MonthlyBudget = result.MonthlyBudget,
+            MonthlyBudgetDisplay = Conversions.ConvertDecimalToCurrency(result.MonthlyBudget),
+            TotalMinimumPayment = result.TotalMinimumPayment,
+            TotalMinimumPaymentDisplay = Conversions.ConvertDecimalToCurrency(result.TotalMinimumPayment),
+            RecommendedStrategy = result.RecommendedStrategy,
+            Snowball = ToResponse(result.Snowball),
+            Avalanche = ToResponse(result.Avalanche),
             CalculationVersion = result.CalculationVersion,
             TraceId = traceId,
             ResponseId = responseId,
@@ -197,6 +233,53 @@ public sealed class CalculationMapper
             ClientReference = clientReference,
             RequestedAt = requestedAt,
             CalculatedAt = calculatedAt
+        };
+
+    private static DebtStrategyPlanResponseDto ToResponse(DebtStrategyPlanResult result)
+        => new()
+        {
+            Strategy = result.Strategy,
+            MonthsToPayoff = result.MonthsToPayoff,
+            TotalPaid = result.TotalPaid,
+            TotalInterestPaid = result.TotalInterestPaid,
+            TotalPaidDisplay = result.TotalPaidDisplay,
+            TotalInterestDisplay = result.TotalInterestDisplay,
+            FinalPayoffDateLabel = result.FinalPayoffDateLabel,
+            PayoffOrder = result.PayoffOrder
+                .Select(item => new DebtStrategyPayoffOrderItemResponseDto
+                {
+                    ClientDebtId = item.ClientDebtId,
+                    Name = item.Name,
+                    PayoffMonth = item.PayoffMonth,
+                    StartingBalance = item.StartingBalance,
+                    AnnualAprPercent = item.AnnualAprPercent
+                })
+                .ToList(),
+            Timeline = result.Timeline
+                .Select(month => new DebtStrategyMonthResponseDto
+                {
+                    MonthNumber = month.MonthNumber,
+                    StartingBalance = month.StartingBalance,
+                    InterestCharged = month.InterestCharged,
+                    PaymentApplied = month.PaymentApplied,
+                    EndingBalance = month.EndingBalance,
+                    Debts = month.Debts
+                        .Select(debt => new DebtStrategyMonthDebtResponseDto
+                        {
+                            ClientDebtId = debt.ClientDebtId,
+                            Name = debt.Name,
+                            StartingBalance = debt.StartingBalance,
+                            InterestCharged = debt.InterestCharged,
+                            PaymentApplied = debt.PaymentApplied,
+                            MinimumPaymentApplied = debt.MinimumPaymentApplied,
+                            ExtraPaymentApplied = debt.ExtraPaymentApplied,
+                            EndingBalance = debt.EndingBalance,
+                            IsTargeted = debt.IsTargeted,
+                            IsPaidOffThisMonth = debt.IsPaidOffThisMonth
+                        })
+                        .ToList()
+                })
+                .ToList()
         };
 
     private static decimal CalculateDownPaymentAmount(MortgageEstimateRequestDto request)
