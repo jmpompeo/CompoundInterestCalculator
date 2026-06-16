@@ -9,13 +9,14 @@ Full-stack personal finance app with a .NET API and React SPA.
 - `POST /api/v1/growth/contribution`: compound growth with monthly contributions
 - `POST /api/v1/growth/savings`: compound growth with no recurring contributions
 - `POST /api/v1/debt/payoff`: debt payoff timeline and interest totals
+- `POST /api/v1/debt/strategy`: snowball and avalanche payoff planning for multiple debts
 - `POST /api/v1/mortgage/estimate`: monthly payment and total-interest estimate
 
 ### Web app tabs
 
 - `Interest calculator`: UI for growth, debt payoff, and mortgage calculations
 - `Budget tracker`: local-first monthly budgeting and expense tracking
-- `Debt log`: local-first debt and payment tracking with payoff projections via `/api/v1/debt/payoff`
+- `Debt log`: local-first debt ledger, snowball/avalanche payoff planning, CSV import/export, and JSON backup/restore
 
 ## Tech Stack
 

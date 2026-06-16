@@ -91,6 +91,55 @@ public sealed class CalculationService : ICalculationService
             calculationVersion: DefaultCalculationVersion);
     }
 
+    public DebtStrategyResult CalculateDebtStrategy(DebtStrategyRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var totalMinimumPayment = request.Debts.Sum(debt => debt.MinimumPayment);
+        if (request.MonthlyBudget < totalMinimumPayment)
+        {
+            throw new InvalidOperationException("Monthly budget must cover the total minimum payments.");
+        }
+
+        var firstMonthInterest = request.Debts.Sum(debt => CalculateMonthlyInterest(debt.CurrentBalance, debt.AnnualAprPercent));
+        if (firstMonthInterest > 0m && request.MonthlyBudget <= firstMonthInterest)
+        {
+            throw new InvalidOperationException("Monthly budget must exceed the first month of accrued interest.");
+        }
+
+        var snowball = SimulateDebtStrategy(
+            "Snowball",
+            request.MonthlyBudget,
+            request.Debts
+                .OrderBy(debt => debt.CurrentBalance)
+                .ThenByDescending(debt => debt.AnnualAprPercent)
+                .ThenBy(debt => debt.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(debt => debt.ClientDebtId, StringComparer.OrdinalIgnoreCase));
+
+        var avalanche = SimulateDebtStrategy(
+            "Avalanche",
+            request.MonthlyBudget,
+            request.Debts
+                .OrderByDescending(debt => debt.AnnualAprPercent)
+                .ThenBy(debt => debt.CurrentBalance)
+                .ThenBy(debt => debt.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(debt => debt.ClientDebtId, StringComparer.OrdinalIgnoreCase));
+
+        var recommendedStrategy = snowball.TotalInterestPaid == avalanche.TotalInterestPaid
+            ? "Tie"
+            : snowball.TotalInterestPaid < avalanche.TotalInterestPaid
+                ? snowball.Strategy
+                : avalanche.Strategy;
+
+        return new DebtStrategyResult(
+            MonthlyBudget: RoundCurrency(request.MonthlyBudget),
+            TotalMinimumPayment: RoundCurrency(totalMinimumPayment),
+            RecommendedStrategy: recommendedStrategy,
+            Snowball: snowball,
+            Avalanche: avalanche,
+            CalculationVersion: DefaultCalculationVersion);
+    }
+
     public MortgageResult CalculateMortgageEstimate(MortgageRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -274,5 +323,263 @@ public sealed class CalculationService : ICalculationService
         }
 
         return schedule;
+    }
+
+    private static DebtStrategyPlanResult SimulateDebtStrategy(
+        string strategy,
+        decimal monthlyBudget,
+        IEnumerable<DebtStrategyDebtRequest> orderedDebts)
+    {
+        const int MaxMonths = 3600;
+        var orderedDebtList = orderedDebts.ToList();
+        var states = orderedDebtList
+            .Select((debt, index) => new DebtSimulationState(
+                debt.ClientDebtId,
+                debt.Name,
+                debt.CurrentBalance,
+                debt.AnnualAprPercent,
+                debt.MinimumPayment,
+                index))
+            .ToList();
+        var timeline = new List<DebtStrategyMonthResult>();
+        var totalPaid = 0m;
+        var totalInterest = 0m;
+        var months = 0;
+
+        while (states.Any(state => state.Balance > 0m))
+        {
+            months++;
+            if (months > MaxMonths)
+            {
+                throw new InvalidOperationException("Debt strategy calculation exceeded the supported duration.");
+            }
+
+            var monthDebts = states
+                .Where(state => state.Balance > 0m)
+                .ToDictionary(
+                    state => state.ClientDebtId,
+                    state => new DebtStrategyMonthDebtAccumulator(state.ClientDebtId, state.Name, state.Balance));
+
+            var monthStartingBalance = states.Sum(state => state.Balance);
+            var monthInterest = 0m;
+            var monthPayment = 0m;
+
+            foreach (var state in states.Where(state => state.Balance > 0m))
+            {
+                var interest = CalculateMonthlyInterest(state.Balance, state.AnnualAprPercent);
+                if (interest > 0m)
+                {
+                    state.Balance += interest;
+                    monthDebts[state.ClientDebtId].InterestCharged += interest;
+                    monthInterest += interest;
+                    totalInterest += interest;
+                }
+            }
+
+            var remainingBudget = monthlyBudget;
+            foreach (var state in states.Where(state => state.Balance > 0m))
+            {
+                var payment = Math.Min(state.MinimumPayment, state.Balance);
+                var monthDebt = monthDebts[state.ClientDebtId];
+                ApplyDebtPayment(state, monthDebt, payment);
+                monthDebt.MinimumPaymentApplied += payment;
+                remainingBudget -= payment;
+                monthPayment += payment;
+                totalPaid += payment;
+            }
+
+            while (remainingBudget > 0m)
+            {
+                var target = states
+                    .Where(state => state.Balance > 0m)
+                    .OrderBy(state => state.Priority)
+                    .FirstOrDefault();
+                if (target is null)
+                {
+                    break;
+                }
+
+                var payment = Math.Min(remainingBudget, target.Balance);
+                var monthDebt = monthDebts[target.ClientDebtId];
+                monthDebt.IsTargeted = true;
+                monthDebt.ExtraPaymentApplied += payment;
+                ApplyDebtPayment(target, monthDebt, payment);
+                remainingBudget -= payment;
+                monthPayment += payment;
+                totalPaid += payment;
+            }
+
+            foreach (var monthDebt in monthDebts.Values)
+            {
+                var state = states.Single(item => item.ClientDebtId == monthDebt.ClientDebtId);
+                monthDebt.EndingBalance = state.Balance;
+                if (monthDebt.StartingBalance > 0m && state.Balance <= 0m && !state.PayoffMonth.HasValue)
+                {
+                    state.PayoffMonth = months;
+                    monthDebt.IsPaidOffThisMonth = true;
+                }
+            }
+
+            timeline.Add(new DebtStrategyMonthResult(
+                MonthNumber: months,
+                StartingBalance: RoundCurrency(monthStartingBalance),
+                InterestCharged: RoundCurrency(monthInterest),
+                PaymentApplied: RoundCurrency(monthPayment),
+                EndingBalance: RoundCurrency(states.Sum(state => state.Balance)),
+                Debts: monthDebts.Values
+                    .OrderBy(debt => states.Single(state => state.ClientDebtId == debt.ClientDebtId).Priority)
+                    .Select(debt => new DebtStrategyMonthDebtResult(
+                        debt.ClientDebtId,
+                        debt.Name,
+                        RoundCurrency(debt.StartingBalance),
+                        RoundCurrency(debt.InterestCharged),
+                        RoundCurrency(debt.PaymentApplied),
+                        RoundCurrency(debt.MinimumPaymentApplied),
+                        RoundCurrency(debt.ExtraPaymentApplied),
+                        RoundCurrency(debt.EndingBalance),
+                        debt.IsTargeted,
+                        debt.IsPaidOffThisMonth))
+                    .ToList()));
+        }
+
+        var roundedTotalPaid = RoundCurrency(totalPaid);
+        var roundedTotalInterest = RoundCurrency(totalInterest);
+
+        return new DebtStrategyPlanResult(
+            Strategy: strategy,
+            MonthsToPayoff: months,
+            TotalPaid: roundedTotalPaid,
+            TotalInterestPaid: roundedTotalInterest,
+            TotalPaidDisplay: Conversions.ConvertDecimalToCurrency(roundedTotalPaid),
+            TotalInterestDisplay: Conversions.ConvertDecimalToCurrency(roundedTotalInterest),
+            FinalPayoffDateLabel: FormatMonthLabel(months),
+            PayoffOrder: states
+                .OrderBy(state => state.Priority)
+                .Select(state => new DebtStrategyPayoffOrderItem(
+                    state.ClientDebtId,
+                    state.Name,
+                    state.PayoffMonth ?? months,
+                    RoundCurrency(state.StartingBalance),
+                    state.AnnualAprPercent))
+                .ToList(),
+            Timeline: timeline);
+    }
+
+    private static decimal CalculateMonthlyInterest(decimal balance, decimal annualAprPercent)
+    {
+        if (annualAprPercent <= 0m)
+        {
+            return 0m;
+        }
+
+        var monthlyRate = decimal.Divide(Conversions.ConvertPercentageToDecimal(annualAprPercent), 12m);
+        return decimal.Round(balance * monthlyRate, 10, MidpointRounding.ToEven);
+    }
+
+    private static void ApplyDebtPayment(
+        DebtSimulationState state,
+        DebtStrategyMonthDebtAccumulator monthDebt,
+        decimal payment)
+    {
+        if (payment <= 0m)
+        {
+            return;
+        }
+
+        state.Balance -= payment;
+        if (state.Balance < 0.0000000001m)
+        {
+            state.Balance = 0m;
+        }
+
+        monthDebt.PaymentApplied += payment;
+    }
+
+    private static decimal RoundCurrency(decimal value)
+        => decimal.Round(value, 2, MidpointRounding.ToEven);
+
+    private static string FormatMonthLabel(int months)
+    {
+        var years = months / 12;
+        var remainingMonths = months % 12;
+
+        return (years, remainingMonths) switch
+        {
+            (0, 1) => "1 month",
+            (0, _) => $"{remainingMonths} months",
+            (1, 0) => "1 year",
+            (1, 1) => "1 year, 1 month",
+            (1, _) => $"1 year, {remainingMonths} months",
+            (_, 0) => $"{years} years",
+            (_, 1) => $"{years} years, 1 month",
+            _ => $"{years} years, {remainingMonths} months"
+        };
+    }
+
+    private sealed class DebtSimulationState
+    {
+        public DebtSimulationState(
+            string clientDebtId,
+            string name,
+            decimal startingBalance,
+            decimal annualAprPercent,
+            decimal minimumPayment,
+            int priority)
+        {
+            ClientDebtId = clientDebtId;
+            Name = name;
+            StartingBalance = startingBalance;
+            Balance = startingBalance;
+            AnnualAprPercent = annualAprPercent;
+            MinimumPayment = minimumPayment;
+            Priority = priority;
+        }
+
+        public string ClientDebtId { get; }
+
+        public string Name { get; }
+
+        public decimal StartingBalance { get; }
+
+        public decimal Balance { get; set; }
+
+        public decimal AnnualAprPercent { get; }
+
+        public decimal MinimumPayment { get; }
+
+        public int Priority { get; }
+
+        public int? PayoffMonth { get; set; }
+    }
+
+    private sealed class DebtStrategyMonthDebtAccumulator
+    {
+        public DebtStrategyMonthDebtAccumulator(string clientDebtId, string name, decimal startingBalance)
+        {
+            ClientDebtId = clientDebtId;
+            Name = name;
+            StartingBalance = startingBalance;
+            EndingBalance = startingBalance;
+        }
+
+        public string ClientDebtId { get; }
+
+        public string Name { get; }
+
+        public decimal StartingBalance { get; }
+
+        public decimal InterestCharged { get; set; }
+
+        public decimal PaymentApplied { get; set; }
+
+        public decimal MinimumPaymentApplied { get; set; }
+
+        public decimal ExtraPaymentApplied { get; set; }
+
+        public decimal EndingBalance { get; set; }
+
+        public bool IsTargeted { get; set; }
+
+        public bool IsPaidOffThisMonth { get; set; }
     }
 }
