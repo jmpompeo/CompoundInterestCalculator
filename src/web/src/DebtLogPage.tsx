@@ -1,5 +1,6 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { addDebt, addDebtPayment, DebtPayment, DebtRecord, getDebtPayments, getDebts } from './debtLog';
+import PageHeader from './components/PageHeader';
 
 type DebtFormState = {
   name: string;
@@ -438,15 +439,14 @@ export default function DebtLogPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-10">
-        <header className="space-y-2">
-          <p className="text-sm uppercase tracking-wide text-brand-300">Debt Log</p>
-          <h1 className="text-3xl font-bold text-white sm:text-4xl">Track debt balances and payoff progress</h1>
-          <p className="text-sm text-slate-300">Debt records and payment history are stored in this browser.</p>
-        </header>
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 text-slate-50 sm:py-10">
+      <PageHeader
+        eyebrow="Debt"
+        title="Track debt balances and payoff progress"
+        description="Debt records, payment history, and payoff projections stay local to this browser."
+      />
 
-        <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-3">
           <article className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
             <p className="text-xs uppercase tracking-wide text-slate-400">Starting debt</p>
             <p className="mt-2 text-xl font-semibold text-white">{formatCurrency(overall.starting)}</p>
@@ -461,7 +461,7 @@ export default function DebtLogPage() {
           </article>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl shadow-slate-900/30">
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl shadow-slate-900/30">
           <h2 className="text-xl font-semibold text-white">Add debt</h2>
           <p className="mt-1 text-sm text-slate-300">Use annual APR. Projection defaults to minimum payment unless custom payment is entered.</p>
           <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={handleDebtFormSubmit}>
@@ -529,22 +529,22 @@ export default function DebtLogPage() {
           {debtFormError ? <p className="mt-3 text-sm text-rose-300">{debtFormError}</p> : null}
         </section>
 
-        {error ? (
-          <section className="rounded-xl border border-rose-900/70 bg-rose-950/50 p-4">
-            <p className="text-sm text-rose-200">{error}</p>
-          </section>
-        ) : null}
+      {error ? (
+        <section className="rounded-xl border border-rose-900/70 bg-rose-950/50 p-4">
+          <p className="text-sm text-rose-200">{error}</p>
+        </section>
+      ) : null}
 
-        {isLoading ? <p className="text-sm text-slate-300">Loading debt log...</p> : null}
+      {isLoading ? <p className="text-sm text-slate-300">Loading debt log...</p> : null}
 
-        {!isLoading && debts.length === 0 ? (
-          <section className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-6 text-sm text-slate-300">
-            No debts yet. Add your first debt above to start tracking payoff progress.
-          </section>
-        ) : null}
+      {!isLoading && debts.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-6 text-sm text-slate-300">
+          No debts yet. Add your first debt above to start tracking payoff progress.
+        </section>
+      ) : null}
 
-        <section className="grid gap-5">
-          {debts.map(debt => {
+      <section className="grid gap-5">
+        {debts.map(debt => {
             const payments = paymentsByDebt[debt.id] ?? [];
             const paymentForm = paymentForms[debt.id] ?? { amount: '', date: todayString(), note: '' };
             const projection = projectionByDebt[debt.id];
@@ -698,8 +698,7 @@ export default function DebtLogPage() {
               </article>
             );
           })}
-        </section>
-      </div>
+      </section>
     </div>
   );
 }
