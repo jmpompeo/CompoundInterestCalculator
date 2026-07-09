@@ -8,6 +8,7 @@ public interface ICalculationService
     CalculationResult CalculateContributionGrowth(InterestCalcReq request);
     CalculationResult CalculateSavingsGrowth(SavingsCalcReq request);
     DebtPayoffResult CalculateDebtPayoff(DebtPayoffRequest request);
+    DebtStrategyResult CalculateDebtStrategy(DebtStrategyRequest request);
     MortgageResult CalculateMortgageEstimate(MortgageRequest request);
     CarLoanResult CalculateCarLoanEstimate(CarLoanRequest request);
 }

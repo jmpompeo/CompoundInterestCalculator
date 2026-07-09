@@ -40,6 +40,55 @@ public sealed class DebtController : ControllerBase
             "debt payoff");
     }
 
+    [HttpPost("strategy")]
+    [ProducesResponseType(typeof(DebtStrategyResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public ActionResult<DebtStrategyResponseDto> CalculateStrategy([FromBody] DebtStrategyRequestDto request)
+    {
+        var domainRequest = _mapper.ToDebtStrategyDomain(request);
+        var traceId = HttpContext.TraceIdentifier;
+        _logger.LogInformation("Calculating debt strategy for trace {TraceId}", traceId);
+
+        try
+        {
+            var result = _calculationService.CalculateDebtStrategy(domainRequest);
+            return Ok(_mapper.ToResponse(request, result, traceId, Guid.NewGuid(), DateTimeOffset.UtcNow));
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogCalculationFailure(traceId, ex, "Debt strategy validation failed.");
+            var problem = new ProblemDetails
+            {
+                Type = "https://calc.example.com/errors/validation",
+                Title = "Invalid calculation request",
+                Status = StatusCodes.Status400BadRequest,
+                Detail = ex.Message,
+                Instance = HttpContext.Request.Path
+            };
+
+            problem.Extensions["traceId"] = traceId;
+
+            return BadRequest(problem);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCalculationFailure(traceId, ex, "Unexpected error while calculating debt strategy.");
+            var problem = new ProblemDetails
+            {
+                Type = "https://calc.example.com/errors/server",
+                Title = "Calculation failed",
+                Status = StatusCodes.Status500InternalServerError,
+                Detail = "An unexpected error occurred while processing the request.",
+                Instance = HttpContext.Request.Path
+            };
+
+            problem.Extensions["traceId"] = traceId;
+
+            return StatusCode(StatusCodes.Status500InternalServerError, problem);
+        }
+    }
+
     private ActionResult<DebtPayoffResponseDto> ExecuteCalculation(
         Func<DebtPayoffResult> calculate,
         Func<string, DebtPayoffResult, DebtPayoffResponseDto> buildResponse,
