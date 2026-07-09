@@ -21,6 +21,7 @@ import {
   restoreDebtLogSnapshot,
   updateDebtLedgerEntry
 } from './debtLog';
+import PageHeader from './components/PageHeader';
 
 type ActiveView = 'planner' | 'ledger' | 'data';
 type StrategyKey = 'snowball' | 'avalanche';
@@ -936,23 +937,22 @@ export default function DebtLogPage() {
   const focusedPlan = strategy ? (focusedStrategy === 'snowball' ? strategy.snowball : strategy.avalanche) : null;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10">
-        <header className="space-y-2">
-          <p className="text-sm uppercase tracking-wide text-brand-300">Debt Log</p>
-          <h1 className="text-3xl font-bold text-white sm:text-4xl">Track debt balances and payoff strategy</h1>
-          <p className="text-sm text-slate-300">Debt records stay in this browser.</p>
-        </header>
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 text-slate-50 sm:py-10">
+      <PageHeader
+        eyebrow="Debt"
+        title="Track debt balances and payoff strategy"
+        description="Debt records, ledger history, and payoff strategies stay local to this browser."
+      />
 
-        <section className="grid gap-3 md:grid-cols-5">
-          <SummaryCard label="Opening debt" value={formatCurrency(overall.opening)} />
-          <SummaryCard label="Current balance" value={formatCurrency(overall.current)} />
-          <SummaryCard label="Minimums" value={formatCurrency(overall.minimums)} />
-          <SummaryCard label="Payments" value={formatCurrency(overall.payments)} accent />
-          <SummaryCard label="Interest + fees" value={formatCurrency(overall.interestAndFees)} />
-        </section>
+      <section className="grid gap-3 md:grid-cols-5">
+        <SummaryCard label="Opening debt" value={formatCurrency(overall.opening)} />
+        <SummaryCard label="Current balance" value={formatCurrency(overall.current)} />
+        <SummaryCard label="Minimums" value={formatCurrency(overall.minimums)} />
+        <SummaryCard label="Payments" value={formatCurrency(overall.payments)} accent />
+        <SummaryCard label="Interest + fees" value={formatCurrency(overall.interestAndFees)} />
+      </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl shadow-slate-900/30">
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl shadow-slate-900/30">
           <h2 className="text-xl font-semibold text-white">Add debt</h2>
           <form className="mt-5 grid gap-4 md:grid-cols-4" onSubmit={handleDebtFormSubmit}>
             <label className="flex flex-col gap-2 md:col-span-2">
@@ -1019,50 +1019,50 @@ export default function DebtLogPage() {
           {debtFormError ? <p className="mt-3 text-sm text-rose-300">{debtFormError}</p> : null}
         </section>
 
-        {error ? (
-          <section className="rounded-xl border border-rose-900/70 bg-rose-950/50 p-4">
-            <p className="text-sm text-rose-200">{error}</p>
-          </section>
-        ) : null}
+      {error ? (
+        <section className="rounded-xl border border-rose-900/70 bg-rose-950/50 p-4">
+          <p className="text-sm text-rose-200">{error}</p>
+        </section>
+      ) : null}
 
-        <div className="flex flex-wrap gap-3">
-          <button type="button" onClick={() => setActiveView('planner')} className={tabClass('planner')}>
-            Planner
-          </button>
-          <button type="button" onClick={() => setActiveView('ledger')} className={tabClass('ledger')}>
-            Ledger
-          </button>
-          <button type="button" onClick={() => setActiveView('data')} className={tabClass('data')}>
-            Data
-          </button>
-        </div>
+      <div className="flex flex-wrap gap-3">
+        <button type="button" onClick={() => setActiveView('planner')} className={tabClass('planner')}>
+          Planner
+        </button>
+        <button type="button" onClick={() => setActiveView('ledger')} className={tabClass('ledger')}>
+          Ledger
+        </button>
+        <button type="button" onClick={() => setActiveView('data')} className={tabClass('data')}>
+          Data
+        </button>
+      </div>
 
-        {isLoading ? <p className="text-sm text-slate-300">Loading debt log...</p> : null}
+      {isLoading ? <p className="text-sm text-slate-300">Loading debt log...</p> : null}
 
-        {!isLoading && debts.length === 0 ? (
-          <section className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-6 text-sm text-slate-300">
-            No debts yet. Add your first debt above.
-          </section>
-        ) : null}
+      {!isLoading && debts.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-6 text-sm text-slate-300">
+          No debts yet. Add your first debt above.
+        </section>
+      ) : null}
 
-        {activeView === 'planner' ? (
-          <PlannerView
-            debtCount={debtRows.filter(row => row.metrics.currentBalanceCents > 0).length}
-            focusedPlan={focusedPlan}
-            focusedStrategy={focusedStrategy}
-            isRunningStrategy={isRunningStrategy}
-            onFocusedStrategyChange={setFocusedStrategy}
-            onRunStrategy={runStrategy}
-            onBudgetChange={value => {
-              setPlannerBudget(value);
-              setHasCustomPlannerBudget(true);
-            }}
-            plannerBudget={plannerBudget}
-            strategy={strategy}
-            strategyError={strategyError}
-            strategyNotice={strategyNotice}
-          />
-        ) : null}
+      {activeView === 'planner' ? (
+        <PlannerView
+          debtCount={debtRows.filter(row => row.metrics.currentBalanceCents > 0).length}
+          focusedPlan={focusedPlan}
+          focusedStrategy={focusedStrategy}
+          isRunningStrategy={isRunningStrategy}
+          onFocusedStrategyChange={setFocusedStrategy}
+          onRunStrategy={runStrategy}
+          onBudgetChange={value => {
+            setPlannerBudget(value);
+            setHasCustomPlannerBudget(true);
+          }}
+          plannerBudget={plannerBudget}
+          strategy={strategy}
+          strategyError={strategyError}
+          strategyNotice={strategyNotice}
+        />
+      ) : null}
 
         {activeView === 'ledger' ? (
           <LedgerView
@@ -1095,7 +1095,6 @@ export default function DebtLogPage() {
             onLedgerCsvImport={handleLedgerCsvImport}
           />
         ) : null}
-      </div>
     </div>
   );
 }

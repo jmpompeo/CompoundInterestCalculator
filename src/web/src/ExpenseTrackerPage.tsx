@@ -29,6 +29,7 @@ import {
   updateExpense,
   upsertBudget
 } from './expenseTracker';
+import PageHeader from './components/PageHeader';
 
 type ExpenseFormState = {
   amount: string;
@@ -1022,14 +1023,14 @@ export default function ExpenseTrackerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
-        <header className="space-y-2">
-          <h1 className="text-3xl font-bold">Monthly Expense Tracker</h1>
-          <p className="text-slate-300">Offline-first expense and budget tracking with local browser storage.</p>
-        </header>
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 text-slate-100 sm:py-10">
+      <PageHeader
+        eyebrow="Budget"
+        title="Stay on top of monthly spending"
+        description="Offline-first expense and budget tracking with local browser storage."
+      />
 
-        <section className="rounded-2xl bg-slate-900 p-5">
+      <section className="rounded-2xl bg-slate-900 p-5">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <button className="rounded border border-slate-700 px-3 py-1" onClick={() => changeMonth(-1)}>
@@ -1053,8 +1054,8 @@ export default function ExpenseTrackerPage() {
           <p className="mt-2 text-xs text-slate-400">Shortcut: <span className="font-semibold text-slate-300">Ctrl/Cmd + Shift + D</span> loads your last expense for quick entry.</p>
         </section>
 
-        {showExpenseForm && (
-          <section className="rounded-2xl bg-slate-900 p-5">
+      {showExpenseForm && (
+        <section className="rounded-2xl bg-slate-900 p-5">
             <h2 className="mb-3 text-xl font-semibold">{editingExpenseId ? 'Edit Expense' : 'Add Expense'}</h2>
             <form className="grid gap-3 sm:grid-cols-2" onSubmit={handleSubmitExpense}>
               <label className="flex flex-col gap-1 text-sm">Amount ($)
@@ -1156,7 +1157,7 @@ export default function ExpenseTrackerPage() {
         {error && <p className="rounded bg-red-500/20 p-3 text-sm text-red-200">{error}</p>}
         {budgetNotice && <p className="rounded bg-sky-500/20 p-3 text-sm text-sky-200">{budgetNotice}</p>}
 
-        <section className="rounded-2xl bg-slate-900 p-5">
+      <section className="rounded-2xl bg-slate-900 p-5">
           <button
             type="button"
             className="mb-3 flex w-full items-center justify-between text-left"
@@ -1596,7 +1597,6 @@ export default function ExpenseTrackerPage() {
             </>
           )}
         </section>
-      </div>
     </div>
   );
 }

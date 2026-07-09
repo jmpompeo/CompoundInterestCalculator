@@ -3,10 +3,19 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
   min-height: 100vh;
-  background-color: #0f172a;
+  margin: 0;
+  background:
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.16), transparent 28%),
+    linear-gradient(180deg, #020617 0%, #020617 100%);
 }
