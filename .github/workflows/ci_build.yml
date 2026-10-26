@@ -8,6 +8,8 @@ on:
 
 jobs:
   build-and-test:
+    # Keep the status-check name required by main branch protection.
+    name: build-and-test (10.0.x)
     runs-on: ubuntu-latest
     strategy:
       matrix:
