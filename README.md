@@ -49,3 +49,9 @@ Full-stack personal finance app with a .NET API and React SPA.
 ```bash
 dotnet test
 ```
+
+## Releases
+
+[Release Please](docs/releases.md) maintains release PRs, the changelog, and GitHub
+releases from conventional commits on `main`. See the guide for token setup and
+the release process.
